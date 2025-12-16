@@ -1,0 +1,118 @@
+{
+  "military_1880": {
+    "background": [
+      "#e8e0d0",
+      "#e1dac8",
+      "#eee4d2"
+    ],
+    "water": [
+      "#5f7a8a",
+      "#556e7d",
+      "#698494"
+    ],
+    "forest": [
+      "#a8c3a0",
+      "#9eb996",
+      "#b2cdaa"
+    ],
+    "grass": [
+      "#c8d4b8",
+      "#becaae",
+      "#d2dec2"
+    ],
+    "building": [
+      "#3d3530",
+      "#332b26",
+      "#473f3a"
+    ],
+    "road_primary": [
+      "#7a6542",
+      "#705b38",
+      "#846f4c"
+    ],
+    "road_secondary": [
+      "#94805a",
+      "#8a7650",
+      "#9e8a64"
+    ]
+  },
+  "cadastral_1900": {
+    "background": [
+      "#faf8f5",
+      "#f5f3ee",
+      "#fcfaf7"
+    ],
+    "water": [
+      "#c5e3f0",
+      "#bbd9e6",
+      "#cfedfa"
+    ],
+    "forest": [
+      "#e8f0e8",
+      "#dee6de",
+      "#f2faf2"
+    ],
+    "grass": [
+      "#f0f5e8",
+      "#e6ebde",
+      "#fafff2"
+    ],
+    "building": [
+      "#e6b8b8",
+      "#dcaeae",
+      "#f0c2c2"
+    ],
+    "building_outline": [
+      "#b08080",
+      "#a67676",
+      "#ba8a8a"
+    ],
+    "road": [
+      "#3a3a3a",
+      "#303030",
+      "#444444"
+    ]
+  },
+  "topographic_1920": {
+    "background": [
+      "#f5f3ed",
+      "#f0eee6",
+      "#f8f6f0"
+    ],
+    "water": [
+      "#b8d9e8",
+      "#aecfde",
+      "#c2e3f2"
+    ],
+    "forest": [
+      "#d5e5c8",
+      "#cbdbbe",
+      "#dfefd2"
+    ],
+    "grass": [
+      "#e0ead5",
+      "#d6e0cb",
+      "#eaf4df"
+    ],
+    "building": [
+      "#d8d0c0",
+      "#cec6b6",
+      "#e2daca"
+    ],
+    "building_outline": [
+      "#2a2520",
+      "#201b16",
+      "#342f2a"
+    ],
+    "road_primary": [
+      "#c84030",
+      "#be3626",
+      "#d24a3a"
+    ],
+    "road_secondary": [
+      "#1a1510",
+      "#100b06",
+      "#241f1a"
+    ]
+  }
+}

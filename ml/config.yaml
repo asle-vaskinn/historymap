@@ -1,0 +1,136 @@
+# Training Configuration for Historical Map Segmentation
+# Phase 3: ML Training
+
+model:
+  # Encoder backbone for U-Net
+  encoder: resnet34  # Options: resnet18, resnet34, resnet50, efficientnet-b0, etc.
+  pretrained: true   # Use ImageNet pretrained weights
+  classes: 5         # background, building, road, water, forest
+
+training:
+  epochs: 50
+  batch_size: 16
+  learning_rate: 0.001
+  optimizer: adam    # Options: adam, sgd, adamw
+  weight_decay: 0.0001
+
+  # Loss function
+  loss: dice         # Options: dice, ce, focal, combined
+
+  # Learning rate scheduler
+  scheduler:
+    type: reduce_on_plateau  # Reduce LR when validation metric plateaus
+    mode: max                # We want to maximize IoU
+    factor: 0.5              # Reduce LR by half
+    patience: 5              # Wait 5 epochs before reducing
+    min_lr: 0.000001         # Minimum learning rate
+
+  # Early stopping
+  early_stopping:
+    enabled: true
+    patience: 10             # Stop if no improvement for 10 epochs
+    metric: val_iou          # Monitor validation IoU
+    mode: max                # Maximize IoU
+
+  # Mixed precision training (faster on modern GPUs)
+  mixed_precision: true
+
+  # Gradient clipping (prevent exploding gradients)
+  grad_clip: 1.0
+
+  # Save checkpoints
+  save_freq: 5               # Save every N epochs
+  save_best_only: true       # Only save when validation improves
+
+data:
+  # Dataset splits
+  train_split: 0.8
+  val_split: 0.1
+  test_split: 0.1
+
+  # Image preprocessing
+  image_size: 512            # Training image size (512x512)
+  normalize: true            # Normalize to ImageNet stats
+  mean: [0.485, 0.456, 0.406]  # ImageNet mean
+  std: [0.229, 0.224, 0.225]   # ImageNet std
+
+  # Data augmentation
+  augmentation:
+    enabled: true
+    horizontal_flip: 0.5     # 50% chance of horizontal flip
+    vertical_flip: 0.5       # 50% chance of vertical flip
+    rotation: 15             # Random rotation ±15 degrees
+    scale: [0.9, 1.1]        # Random scale 90-110%
+    brightness: 0.2          # Random brightness adjustment
+    contrast: 0.2            # Random contrast adjustment
+    saturation: 0.1          # Random saturation adjustment
+    hue: 0.05                # Random hue adjustment
+
+  # Class weights (for handling imbalance)
+  # Set to null to compute automatically from dataset
+  class_weights: null
+
+  # Number of worker processes for data loading
+  num_workers: 4
+
+  # Pin memory for faster GPU transfer
+  pin_memory: true
+
+paths:
+  # Data directory (from Phase 2 synthetic generation)
+  data_dir: ../data/synthetic
+
+  # Checkpoint directory
+  checkpoint_dir: ../models/checkpoints
+
+  # Training logs directory
+  log_dir: ../results/training_logs
+
+  # Best model save path
+  best_model: ../models/checkpoints/best_model.pth
+
+  # Last checkpoint (for resuming)
+  last_checkpoint: ../models/checkpoints/last_checkpoint.pth
+
+logging:
+  # Console logging level
+  console_level: INFO        # DEBUG, INFO, WARNING, ERROR
+
+  # File logging
+  file_level: DEBUG
+
+  # Log to file
+  log_file: true
+
+  # Progress bar
+  use_tqdm: true
+
+  # Print frequency (batches)
+  print_freq: 10
+
+  # Validation frequency (epochs)
+  val_freq: 1
+
+# Device configuration (auto-detected by default)
+device: auto                 # Options: auto, cuda, mps, cpu
+
+# Random seed for reproducibility
+seed: 42
+
+# Metric configuration
+metrics:
+  # Which metrics to compute
+  compute_iou: true           # Intersection over Union per class
+  compute_accuracy: true      # Overall pixel accuracy
+  compute_confusion_matrix: true  # Confusion matrix
+
+  # IoU threshold for "good" prediction
+  iou_threshold: 0.5
+
+# Class names (for logging and visualization)
+class_names:
+  0: background
+  1: building
+  2: road
+  3: water
+  4: forest
