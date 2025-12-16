@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker*)",
+      "Bash(python*)",
+      "Bash(npm*)",
+      "Bash(pip*)",
+      "Bash(./scripts/*)",
+      "Bash(git*)",
+      "Bash(gh*)"
+    ]
+  }
+}
