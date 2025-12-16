@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trondheim Historical Map</title>
+
+    <!-- MapLibre GL JS -->
+    <script src="https://unpkg.com/maplibre-gl@4.0.0/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@4.0.0/dist/maplibre-gl.css" rel="stylesheet" />
+
+    <!-- PMTiles Protocol -->
+    <script src="https://unpkg.com/pmtiles@3.0.6/dist/pmtiles.js"></script>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="map"></div>
+
+    <!-- Time Controls Overlay -->
+    <div class="controls-container">
+        <div class="controls-header">
+            <h1>Trondheim Historical Map</h1>
+            <div class="year-display">
+                <span class="year-label">Year:</span>
+                <span class="year-value" id="currentYear">2020</span>
+            </div>
+        </div>
+
+        <div class="slider-container">
+            <label for="yearSlider" class="slider-label">
+                <span class="year-min">1850</span>
+                <input
+                    type="range"
+                    id="yearSlider"
+                    min="1850"
+                    max="2025"
+                    value="2020"
+                    step="1"
+                    class="year-slider"
+                    aria-label="Select year"
+                />
+                <span class="year-max">2025</span>
+            </label>
+        </div>
+
+        <div class="info-panel">
+            <p class="info-text">
+                Drag the slider to view features from different time periods.
+                Buildings and features are shown if they existed in the selected year.
+            </p>
+            <div class="legend">
+                <h3>Legend</h3>
+                <div class="legend-item">
+                    <span class="legend-color" style="background-color: #d4a373;"></span>
+                    <span>Buildings</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-color" style="background-color: #666666;"></span>
+                    <span>Roads</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-color" style="background-color: #4a90e2;"></span>
+                    <span>Water</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-color" style="background-color: #7fb069;"></span>
+                    <span>Green Spaces</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading indicator -->
+    <div id="loading" class="loading">
+        <div class="spinner"></div>
+        <p>Loading map...</p>
+    </div>
+
+    <!-- Error message -->
+    <div id="error" class="error-message" style="display: none;">
+        <p id="errorText"></p>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

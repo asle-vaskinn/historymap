@@ -7,7 +7,20 @@
       "Bash(pip*)",
       "Bash(./scripts/*)",
       "Bash(git*)",
-      "Bash(gh*)"
+      "Bash(gh*)",
+      "Bash(test:*)",
+      "Bash(chmod:*)",
+      "Bash(tree:*)",
+      "Bash(find:*)",
+      "Bash(./scripts/validate_phase1.sh:*)",
+      "Bash(ls:*)",
+      "Bash(/Users/vaskinn/Development/private/historymap/scripts/download_osm.sh:*)",
+      "Bash(bash:*)",
+      "Bash(timeout 5 bash:*)",
+      "Bash(docker compose:*)",
+      "Bash(docker run:*)",
+      "Bash(cat:*)",
+      "Bash(git add:*)"
     ]
   }
 }
