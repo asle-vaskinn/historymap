@@ -1,0 +1,31 @@
+# Phase 4: Real Data Integration - Requirements
+# Scripts for downloading, georeferencing, and tiling historical maps
+
+# Core dependencies
+requests>=2.31.0
+tqdm>=4.65.0
+
+# Geospatial processing
+# Note: GDAL installation varies by platform
+# macOS: brew install gdal && pip install gdal==$(gdal-config --version)
+# Ubuntu: apt-get install gdal-bin libgdal-dev && pip install gdal==$(gdal-config --version)
+# Windows: Download from https://www.lfd.uci.edu/~gohlke/pythonlibs/#gdal
+GDAL>=3.6.0  # May need platform-specific installation
+
+rasterio>=1.3.9
+pyproj>=3.6.0
+
+# Image processing
+Pillow>=10.0.0
+numpy>=1.24.0,<2.0.0
+
+# Optional: OpenCV for auto-detection features
+# opencv-python>=4.8.0
+
+# Already included in ml/requirements.txt but needed for tile processing:
+# - numpy
+# - rasterio
+# - Pillow
+
+# Note: If you've already installed ml/requirements.txt, you may only need:
+# pip install requests tqdm GDAL pyproj

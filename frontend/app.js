@@ -46,6 +46,7 @@ function createMapStyle(year) {
     return {
         version: 8,
         name: 'Trondheim Historical',
+        glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
         sources: {
             trondheim: {
                 type: 'vector',

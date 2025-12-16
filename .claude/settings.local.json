@@ -23,7 +23,21 @@
       "Bash(git add:*)",
       "Bash(git commit -m \"$(cat <<''EOF''\nImplement Phase 1: Infrastructure + Frontend\n\nFrontend (MapLibre GL JS):\n- Time slider with 1850-2025 range\n- Temporal filtering by start_date/end_date\n- Styled layers: buildings, roads, water, landuse\n- Responsive design with mobile support\n- PMTiles protocol integration\n\nData Pipeline Scripts:\n- download_osm.sh: Fetch Trondheim from Overpass API\n- generate_tiles.sh: Convert to PMTiles with tilemaker/planetiler\n- Preserves temporal attributes for time filtering\n\nInfrastructure:\n- docker-compose.yml with nginx\n- nginx.conf with PMTiles MIME types, CORS, compression\n- validate_phase1.sh verification script\n\nDocumentation:\n- README.md with setup instructions\n- QUICKSTART.md for fast start\n- Scripts documentation\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")",
       "Bash(python3:*)",
-      "Bash(./verify_installation.sh)"
+      "Bash(./verify_installation.sh)",
+      "Bash(python test_annotation_tools.py:*)",
+      "Bash(./scripts/validate_phase4.sh:*)",
+      "Bash(python download_kartverket.py:*)",
+      "Bash(python georeference.py:*)",
+      "Bash(python tile_maps.py:*)",
+      "Bash(java:*)",
+      "Bash(source .venv/bin/activate)",
+      "Bash(/Users/vaskinn/Development/private/historymap/.venv/bin/python:*)",
+      "Bash(python scripts/download_kartverket.py:*)",
+      "Bash(PYTHONPATH=/Users/vaskinn/Development/private/historymap:$PYTHONPATH /Users/vaskinn/Development/private/historymap/.venv/bin/python:*)",
+      "Bash(brew install:*)",
+      "Bash(export PATH=\"/opt/homebrew/opt/openjdk@17/bin:$PATH\")",
+      "Bash(./scripts/download_osm.sh)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nImplement Phase 4: Real Data Integration\n\nKartverket Data Pipeline:\n- download_kartverket.py: Fetch historical maps via Geonorge API\n- georeference.py: Align maps with GDAL, GCP support, RMS quality\n- tile_maps.py: Cut into ML-ready tiles with geo-coordinates\n\nAnnotation Tools:\n- annotation_helper.py: Tkinter GUI for manual labeling\n- annotation_progress.py: Track annotation statistics\n- Keyboard shortcuts, brush tools, model prediction overlay\n\nFine-tuning & Extraction:\n- fine_tune.py: Adapt model to real data (lower LR, encoder freezing)\n- batch_extract.py: Process all tiles, vectorize to GeoJSON\n- Temporal attributes (start_date, end_date) from map metadata\n\nValidation:\n- validate_phase4.sh: Comprehensive Phase 4 checks\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")"
     ]
   }
 }
