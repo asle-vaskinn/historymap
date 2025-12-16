@@ -1,0 +1,146 @@
+{
+  "downloaded": [],
+  "failed": [
+    {
+      "uuid": "a8b1ad90-e0fc-4ea0-bab8-dd80a8494052",
+      "reason": "no_download_links",
+      "timestamp": "2025-12-16 22:41:17"
+    },
+    {
+      "uuid": "311dc782-d6b0-495a-a6c9-02294eaa2345",
+      "reason": "no_download_links",
+      "timestamp": "2025-12-16 22:41:18"
+    },
+    {
+      "uuid": "7704fe93-c609-4b3a-9d10-e5a7d08979a2",
+      "reason": "no_download_links",
+      "timestamp": "2025-12-16 22:41:19"
+    },
+    {
+      "uuid": "55d5d926-d119-4287-8ee2-f524cf101911",
+      "reason": "no_download_links",
+      "timestamp": "2025-12-16 22:41:21"
+    },
+    {
+      "uuid": "de2e4dc4-3f4d-461e-b098-5d48ff8a3f97",
+      "reason": "no_download_links",
+      "timestamp": "2025-12-16 22:41:22"
+    },
+    {
+      "uuid": "0b096caa-3244-41fb-a801-332ac3a9f6b4",
+      "reason": "no_download_links",
+      "timestamp": "2025-12-16 22:41:24"
+    },
+    {
+      "uuid": "4f97d8a2-9af1-49da-86a4-2857b24ee6b8",
+      "reason": "no_download_links",
+      "timestamp": "2025-12-16 22:41:25"
+    },
+    {
+      "uuid": "52ff8958-88de-4d61-bc0e-4f1caeb6864f",
+      "reason": "no_download_links",
+      "timestamp": "2025-12-16 22:41:26"
+    },
+    {
+      "uuid": "45e69e05-d17f-42fd-8f01-43751b671853",
+      "reason": "no_download_links",
+      "timestamp": "2025-12-16 22:41:28"
+    },
+    {
+      "uuid": "73d6303e-7815-4f91-8cd3-99a6e227b0a3",
+      "reason": "no_download_links",
+      "timestamp": "2025-12-16 22:41:29"
+    },
+    {
+      "uuid": "10846182-136a-4052-bc37-590686bfed1d",
+      "reason": "no_download_links",
+      "timestamp": "2025-12-16 22:41:30"
+    },
+    {
+      "uuid": "3e2ca03a-0978-4d1a-894f-83866b3a0b5a",
+      "reason": "no_download_links",
+      "timestamp": "2025-12-16 22:41:32"
+    },
+    {
+      "uuid": "fb59846b-edb3-4631-ba85-90dd0193e3be",
+      "reason": "no_download_links",
+      "timestamp": "2025-12-16 22:41:33"
+    },
+    {
+      "uuid": "a29b905c-6aaa-4283-ae2c-d167624c08a8",
+      "reason": "no_download_links",
+      "timestamp": "2025-12-16 22:41:35"
+    },
+    {
+      "uuid": "74340c24-1c8a-4454-b813-bfe498e80f16",
+      "reason": "no_download_links",
+      "timestamp": "2025-12-16 22:41:36"
+    },
+    {
+      "uuid": "bd23cc07-45d3-4346-a8cd-e8c9f506656e",
+      "reason": "no_download_links",
+      "timestamp": "2025-12-16 22:41:38"
+    },
+    {
+      "uuid": "5a887d78-07ef-44c6-8941-cb8017c6328c",
+      "reason": "no_download_links",
+      "timestamp": "2025-12-16 22:41:39"
+    },
+    {
+      "uuid": "30caed2f-454e-44be-b5cc-26bb5c0110ca",
+      "reason": "no_download_links",
+      "timestamp": "2025-12-16 22:41:41"
+    },
+    {
+      "uuid": "ee64e4fb-70b2-485f-9d98-cec0b7d41deb",
+      "reason": "no_download_links",
+      "timestamp": "2025-12-16 22:41:42"
+    },
+    {
+      "uuid": "d2810d22-6974-4897-94fd-bdfe0af1cfbe",
+      "reason": "no_download_links",
+      "timestamp": "2025-12-16 22:41:43"
+    },
+    {
+      "uuid": "739810c2-ac22-4fb1-b5d4-19014194804b",
+      "reason": "no_download_links",
+      "timestamp": "2025-12-16 22:41:45"
+    },
+    {
+      "uuid": "596180d5-1e0b-4409-8cc1-8e073535f015",
+      "reason": "no_download_links",
+      "timestamp": "2025-12-16 22:41:46"
+    },
+    {
+      "uuid": "e1c50348-962d-4047-8325-bdc265c853ed",
+      "reason": "no_download_links",
+      "timestamp": "2025-12-16 22:41:48"
+    },
+    {
+      "uuid": "280bbd7a-5ce9-4c83-9e15-ac162cabd8a6",
+      "reason": "no_download_links",
+      "timestamp": "2025-12-16 22:41:49"
+    },
+    {
+      "uuid": "697a5338-d92c-49f5-9dba-2e356d9f18d7",
+      "reason": "no_download_links",
+      "timestamp": "2025-12-16 22:41:51"
+    },
+    {
+      "uuid": "dfd900d8-bc16-4f7a-a08a-3f0081284259",
+      "reason": "no_download_links",
+      "timestamp": "2025-12-16 22:41:52"
+    },
+    {
+      "uuid": "5cb86063-3f66-4d7a-9799-0551e2e21a46",
+      "reason": "no_download_links",
+      "timestamp": "2025-12-16 22:41:54"
+    },
+    {
+      "uuid": "66ff92a6-b871-4934-9ac8-6841ff874e0c",
+      "reason": "no_download_links",
+      "timestamp": "2025-12-16 22:41:55"
+    }
+  ],
+  "last_update": "2025-12-16 22:41:55"
+}

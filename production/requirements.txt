@@ -1,0 +1,10 @@
+# Phase 5: Production Requirements
+# Requirements for data merging and final tile generation
+
+# Core dependencies
+geojson>=3.0.0
+shapely>=2.0.0
+numpy>=1.24.0
+
+# Optional but recommended
+python-dateutil>=2.8.0

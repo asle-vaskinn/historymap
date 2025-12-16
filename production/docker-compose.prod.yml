@@ -1,0 +1,78 @@
+# Production Docker Compose Configuration
+# Trondheim Historical Map System
+# Optimized for production deployment with resource limits and logging
+
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: production/Dockerfile
+    image: trondheim-historical-map:latest
+    container_name: historymap-production
+    ports:
+      - "80:80"
+    restart: always
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+    # Environment variables
+    environment:
+      - NGINX_HOST=localhost
+      - NGINX_PORT=80
+      - TZ=Europe/Oslo
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "service,environment"
+        tag: "{{.Name}}/{{.ID}}"
+
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+
+    # Read-only root filesystem (nginx writes to /var/cache/nginx and /var/run)
+    read_only: false
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+
+    # Labels for monitoring
+    labels:
+      - "com.trondheim.historymap.service=web"
+      - "com.trondheim.historymap.environment=production"
+      - "com.trondheim.historymap.version=1.0"
+
+# Optional: Networks for better isolation
+networks:
+  default:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# Optional: Volumes for persistent logs
+volumes:
+  nginx-logs:
+    driver: local

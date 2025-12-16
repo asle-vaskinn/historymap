@@ -251,8 +251,12 @@ class DatasetGenerator:
         west, south, east, north = bbox
 
         # Convert corners to tile coordinates
-        x_min, y_max = TileCoordinates.lonlat_to_tile(west, north, zoom)
-        x_max, y_min = TileCoordinates.lonlat_to_tile(east, south, zoom)
+        x1, y1 = TileCoordinates.lonlat_to_tile(west, north, zoom)
+        x2, y2 = TileCoordinates.lonlat_to_tile(east, south, zoom)
+
+        # Ensure correct ordering (Y is inverted in tile coordinates)
+        x_min, x_max = min(x1, x2), max(x1, x2)
+        y_min, y_max = min(y1, y2), max(y1, y2)
 
         # Generate all tiles in range
         all_tiles = []

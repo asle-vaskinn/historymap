@@ -34,14 +34,14 @@ except ImportError:
     HAS_MVT = False
     logging.warning("mapbox-vector-tile not installed. Vector tile decoding will be limited.")
 
+from tile_utils import TileCoordinates, tile_to_quadkey
+
 try:
-    from pmtiles.reader import Reader as PMTilesReader
+    from pmtiles.reader import Reader as PMTilesReaderBase, MmapSource
     HAS_PMTILES = True
 except ImportError:
     HAS_PMTILES = False
     logging.warning("pmtiles library not installed. Cannot read PMTiles files directly.")
-
-from tile_utils import TileCoordinates, tile_to_quadkey
 
 
 # Configure logging
@@ -368,9 +368,12 @@ class PillowRenderer:
         """
         Project feature coordinates to pixel space.
 
+        MVT coordinates are in tile-local space (0-4096 extent), not geographic.
+        We just need to scale them to pixel coordinates.
+
         Args:
-            feature: GeoJSON-like feature
-            tile_bbox: Tile bounding box (min_lon, min_lat, max_lon, max_lat)
+            feature: GeoJSON-like feature with MVT coordinates
+            tile_bbox: Tile bounding box (unused for MVT, kept for API compatibility)
 
         Returns:
             Projected coordinates suitable for PIL drawing
@@ -379,30 +382,28 @@ class PillowRenderer:
         geom_type = geometry.get('type')
         coords = geometry.get('coordinates', [])
 
-        min_lon, min_lat, max_lon, max_lat = tile_bbox
-        lon_range = max_lon - min_lon
-        lat_range = max_lat - min_lat
+        # MVT extent is typically 4096
+        mvt_extent = 4096
 
-        def project_point(lon: float, lat: float) -> Tuple[int, int]:
-            """Project single lon/lat point to pixel coordinates."""
-            x = ((lon - min_lon) / lon_range) * self.config.tile_size
-            # Flip Y axis (map coordinates increase north, image coordinates increase south)
-            y = ((max_lat - lat) / lat_range) * self.config.tile_size
-            return (int(x), int(y))
+        def scale_point(x: float, y: float) -> Tuple[int, int]:
+            """Scale MVT point to pixel coordinates."""
+            px = int((x / mvt_extent) * self.config.tile_size)
+            py = int((y / mvt_extent) * self.config.tile_size)
+            return (px, py)
 
-        def project_coords(coords_list, depth=0):
-            """Recursively project coordinates."""
+        def scale_coords(coords_list, depth=0):
+            """Recursively scale coordinates."""
             if not coords_list:
                 return []
 
             # Check if this is a coordinate pair (leaf node)
             if isinstance(coords_list[0], (int, float)):
-                return project_point(coords_list[0], coords_list[1])
+                return scale_point(coords_list[0], coords_list[1])
 
             # Otherwise, recurse
-            return [project_coords(c, depth + 1) for c in coords_list]
+            return [scale_coords(c, depth + 1) for c in coords_list]
 
-        return project_coords(coords)
+        return scale_coords(coords)
 
 
 class TileRenderer:
@@ -476,13 +477,22 @@ class TileRenderer:
             return {}
 
         try:
-            with PMTilesReader(pmtiles_path) as reader:
+            with open(pmtiles_path, 'rb') as f:
+                source = MmapSource(f)
+                reader = PMTilesReaderBase(source)
+
+                import gzip
+
                 # Get tile data
                 tile_data = reader.get(z, x, y)
 
                 if tile_data is None:
                     logger.warning(f"No tile data for z={z}, x={x}, y={y}")
                     return {}
+
+                # Decompress if gzipped
+                if tile_data[:2] == b'\x1f\x8b':  # gzip magic bytes
+                    tile_data = gzip.decompress(tile_data)
 
                 # Decode vector tile
                 decoded = mapbox_vector_tile.decode(tile_data)

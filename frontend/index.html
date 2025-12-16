@@ -3,7 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trondheim Historical Map</title>
+    <title>Trondheim Historical Map - Explore 175 Years of History</title>
+    <meta name="description" content="Interactive historical map of Trondheim, Norway from 1850 to present. Explore how buildings, roads, and the city evolved over 175 years using ML-extracted features from historical maps.">
+    <meta name="keywords" content="Trondheim, historical map, Norway, cartography, OpenStreetMap, Kartverket, time-travel map">
+    <meta name="author" content="Trondheim Historical Map Project">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://yourdomain.com/">
+    <meta property="og:title" content="Trondheim Historical Map - Explore 175 Years of History">
+    <meta property="og:description" content="Interactive historical map showing the evolution of Trondheim from 1850 to present day.">
+    <meta property="og:image" content="https://yourdomain.com/preview.jpg">
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://yourdomain.com/">
+    <meta property="twitter:title" content="Trondheim Historical Map">
+    <meta property="twitter:description" content="Explore 175 years of Trondheim's history through interactive maps">
+    <meta property="twitter:image" content="https://yourdomain.com/preview.jpg">
 
     <!-- MapLibre GL JS -->
     <script src="https://unpkg.com/maplibre-gl@4.0.0/dist/maplibre-gl.js"></script>
@@ -27,6 +44,21 @@
             </div>
         </div>
 
+        <!-- Era Indicator -->
+        <div class="era-indicator">
+            <h3>Current Era</h3>
+            <div class="era-info">
+                <strong>Period:</strong> <span id="eraText">21st Century</span>
+            </div>
+            <div class="era-info">
+                <strong>Sources:</strong> <span id="dataSource">OpenStreetMap</span>
+            </div>
+            <div class="era-info">
+                <strong>Features:</strong> <span id="featureCount">Loading...</span>
+            </div>
+        </div>
+
+        <!-- Time Slider -->
         <div class="slider-container">
             <label for="yearSlider" class="slider-label">
                 <span class="year-min">1850</span>
@@ -44,30 +76,91 @@
             </label>
         </div>
 
+        <!-- Animation Controls -->
+        <div class="animation-controls">
+            <button id="playBtn" class="btn" aria-label="Play timeline animation">
+                Play Timeline
+            </button>
+        </div>
+
+        <!-- Layer Toggles -->
+        <div class="layer-toggles">
+            <h3>Visible Layers</h3>
+            <div class="toggle-buttons">
+                <button id="buildingsToggle" class="toggle-btn active" aria-pressed="true">
+                    Buildings
+                </button>
+                <button id="roadsToggle" class="toggle-btn active" aria-pressed="true">
+                    Roads
+                </button>
+                <button id="waterToggle" class="toggle-btn active" aria-pressed="true">
+                    Water
+                </button>
+                <button id="confidenceToggle" class="toggle-btn" aria-pressed="false">
+                    Show Confidence
+                </button>
+            </div>
+        </div>
+
+        <!-- Info Panel with Enhanced Legend -->
         <div class="info-panel">
-            <p class="info-text">
-                Drag the slider to view features from different time periods.
-                Buildings and features are shown if they existed in the selected year.
-            </p>
             <div class="legend">
                 <h3>Legend</h3>
-                <div class="legend-item">
-                    <span class="legend-color" style="background-color: #d4a373;"></span>
-                    <span>Buildings</span>
+
+                <div class="legend-section">
+                    <div class="legend-section-title">Modern Features (1950+)</div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background-color: #d4a373;"></span>
+                        <span>Buildings</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background-color: #888888;"></span>
+                        <span>Roads</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background-color: #4a90e2;"></span>
+                        <span>Water</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background-color: #7fb069;"></span>
+                        <span>Green Spaces</span>
+                    </div>
                 </div>
-                <div class="legend-item">
-                    <span class="legend-color" style="background-color: #666666;"></span>
-                    <span>Roads</span>
+
+                <div class="legend-section">
+                    <div class="legend-section-title">Historical Features (pre-1950)</div>
+                    <div class="legend-item">
+                        <span class="legend-color historical" style="background-color: #b89968;"></span>
+                        <span>Old Buildings (sepia tones)</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color historical" style="background-color: #6b9bc3;"></span>
+                        <span>Historical Water Bodies</span>
+                    </div>
                 </div>
-                <div class="legend-item">
-                    <span class="legend-color" style="background-color: #4a90e2;"></span>
-                    <span>Water</span>
-                </div>
-                <div class="legend-item">
-                    <span class="legend-color" style="background-color: #7fb069;"></span>
-                    <span>Green Spaces</span>
+
+                <div class="legend-section">
+                    <div class="legend-section-title">Confidence Overlay</div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background-color: #00ff00;"></span>
+                        <span>High (0.7-1.0)</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background-color: #ffff00;"></span>
+                        <span>Medium (0.4-0.7)</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background-color: #ff0000;"></span>
+                        <span>Low (0.0-0.4)</span>
+                    </div>
                 </div>
             </div>
+
+            <a href="about.html" class="about-link">Learn More About This Project</a>
+
+            <p class="info-text" style="margin-top: 15px; font-size: 11px; color: #6c757d;">
+                Data: © OpenStreetMap contributors | Kartverket
+            </p>
         </div>
     </div>
 

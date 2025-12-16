@@ -21,12 +21,27 @@ const CONFIG = {
 
     // Year range
     minYear: 1850,
-    maxYear: 2025
+    maxYear: 2025,
+
+    // Historical era threshold (pre-1950 features get historical styling)
+    historicalThreshold: 1950,
+
+    // Key historical dates for slider markers
+    keyDates: [1850, 1900, 1950, 2000, 2025]
 };
 
 // Global state
 let map = null;
 let currentYear = CONFIG.defaultYear;
+let animationFrameId = null;
+let isAnimating = false;
+let layerVisibility = {
+    buildings: true,
+    roads: true,
+    water: true,
+    landuse: true,
+    confidenceOverlay: false
+};
 
 /**
  * Initialize the PMTiles protocol handler
@@ -38,20 +53,68 @@ function initPMTiles() {
 }
 
 /**
- * Create the map style with temporal filtering
+ * Get historical styling for features based on year and confidence
+ * @param {number} year - The current selected year
+ * @returns {object} Styling parameters for historical features
+ */
+function getHistoricalStyle(year) {
+    const isHistorical = year < CONFIG.historicalThreshold;
+
+    if (isHistorical) {
+        // Calculate how "old" the view is (0 = 1950, 1 = 1850)
+        const age = (CONFIG.historicalThreshold - year) / (CONFIG.historicalThreshold - CONFIG.minYear);
+
+        return {
+            // Sepia tones for buildings - more intense for older dates
+            buildingColor: [
+                'interpolate',
+                ['linear'],
+                ['coalesce', ['get', 'start_date'], year],
+                1850, '#b89968',  // Dark sepia for very old
+                1900, '#c9a876',  // Medium sepia
+                1950, '#d4a373',  // Light sepia/tan
+                2000, '#d4a373'   // Normal color for modern
+            ],
+            // Opacity based on confidence if available
+            buildingOpacity: [
+                'case',
+                ['has', 'confidence'],
+                ['*', ['get', 'confidence'], 0.8],
+                isHistorical ? 0.75 : 0.8
+            ],
+            // Muted colors for old roads
+            roadMuteFactor: 0.7,
+            waterColor: isHistorical ? '#6b9bc3' : '#4a90e2',
+            backgroundColor: isHistorical ? '#e8dfc8' : '#f0ebe0'
+        };
+    }
+
+    return {
+        buildingColor: '#d4a373',
+        buildingOpacity: 0.8,
+        roadMuteFactor: 1.0,
+        waterColor: '#4a90e2',
+        backgroundColor: '#f0ebe0'
+    };
+}
+
+/**
+ * Create the map style with temporal filtering and historical styling
  * @param {number} year - The year to filter features by
  * @returns {object} MapLibre style object
  */
 function createMapStyle(year) {
+    const style = getHistoricalStyle(year);
+
     return {
         version: 8,
         name: 'Trondheim Historical',
-        glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+        glyphs: 'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf',
         sources: {
             trondheim: {
                 type: 'vector',
                 url: `pmtiles://${CONFIG.pmtilesPath}`,
-                attribution: '&copy; OpenStreetMap contributors'
+                attribution: '&copy; OpenStreetMap contributors | Kartverket'
             }
         },
         layers: [
@@ -60,7 +123,7 @@ function createMapStyle(year) {
                 id: 'background',
                 type: 'background',
                 paint: {
-                    'background-color': '#f0ebe0'
+                    'background-color': style.backgroundColor
                 }
             },
 
@@ -71,8 +134,11 @@ function createMapStyle(year) {
                 source: 'trondheim',
                 'source-layer': 'water',
                 filter: createTemporalFilter(year),
+                layout: {
+                    'visibility': layerVisibility.water ? 'visible' : 'none'
+                },
                 paint: {
-                    'fill-color': '#4a90e2',
+                    'fill-color': style.waterColor,
                     'fill-opacity': 0.7
                 }
             },
@@ -82,8 +148,11 @@ function createMapStyle(year) {
                 source: 'trondheim',
                 'source-layer': 'water',
                 filter: createTemporalFilter(year),
+                layout: {
+                    'visibility': layerVisibility.water ? 'visible' : 'none'
+                },
                 paint: {
-                    'line-color': '#2e5f8a',
+                    'line-color': style.waterColor === '#4a90e2' ? '#2e5f8a' : '#4a6b8c',
                     'line-width': 1,
                     'line-opacity': 0.6
                 }
@@ -96,6 +165,9 @@ function createMapStyle(year) {
                 source: 'trondheim',
                 'source-layer': 'landuse',
                 filter: createTemporalFilter(year),
+                layout: {
+                    'visibility': layerVisibility.landuse ? 'visible' : 'none'
+                },
                 paint: {
                     'fill-color': [
                         'match',
@@ -117,6 +189,9 @@ function createMapStyle(year) {
                 source: 'trondheim',
                 'source-layer': 'transportation',
                 filter: ['all', createTemporalFilter(year), ['in', ['get', 'class'], ['literal', ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'minor', 'service']]]],
+                layout: {
+                    'visibility': layerVisibility.roads ? 'visible' : 'none'
+                },
                 paint: {
                     'line-color': '#ffffff',
                     'line-width': [
@@ -159,6 +234,9 @@ function createMapStyle(year) {
                 source: 'trondheim',
                 'source-layer': 'transportation',
                 filter: ['all', createTemporalFilter(year), ['in', ['get', 'class'], ['literal', ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'minor', 'service']]]],
+                layout: {
+                    'visibility': layerVisibility.roads ? 'visible' : 'none'
+                },
                 paint: {
                     'line-color': [
                         'match',
@@ -210,9 +288,12 @@ function createMapStyle(year) {
                 source: 'trondheim',
                 'source-layer': 'building',
                 filter: createTemporalFilter(year),
+                layout: {
+                    'visibility': layerVisibility.buildings ? 'visible' : 'none'
+                },
                 paint: {
-                    'fill-color': '#d4a373',
-                    'fill-opacity': 0.8
+                    'fill-color': style.buildingColor,
+                    'fill-opacity': style.buildingOpacity
                 }
             },
             {
@@ -221,6 +302,9 @@ function createMapStyle(year) {
                 source: 'trondheim',
                 'source-layer': 'building',
                 filter: createTemporalFilter(year),
+                layout: {
+                    'visibility': layerVisibility.buildings ? 'visible' : 'none'
+                },
                 paint: {
                     'line-color': '#8b6f47',
                     'line-width': [
@@ -231,6 +315,29 @@ function createMapStyle(year) {
                         16, 1
                     ],
                     'line-opacity': 0.8
+                }
+            },
+
+            // Confidence overlay (only visible when enabled)
+            {
+                id: 'confidence-overlay',
+                type: 'fill',
+                source: 'trondheim',
+                'source-layer': 'building',
+                filter: ['all', createTemporalFilter(year), ['has', 'confidence']],
+                layout: {
+                    'visibility': layerVisibility.confidenceOverlay ? 'visible' : 'none'
+                },
+                paint: {
+                    'fill-color': [
+                        'interpolate',
+                        ['linear'],
+                        ['get', 'confidence'],
+                        0.0, '#ff0000',  // Red for low confidence
+                        0.5, '#ffff00',  // Yellow for medium
+                        1.0, '#00ff00'   // Green for high confidence
+                    ],
+                    'fill-opacity': 0.4
                 }
             },
 
@@ -361,9 +468,119 @@ function updateMapYear(year) {
         // Update the year display
         document.getElementById('currentYear').textContent = year;
 
+        // Update era indicator
+        updateEraIndicator(year);
+
     } catch (error) {
         console.error('Failed to update map year:', error);
         showError('Failed to update year: ' + error.message);
+    }
+}
+
+/**
+ * Toggle layer visibility
+ * @param {string} layerName - Name of layer to toggle
+ */
+function toggleLayer(layerName) {
+    if (layerName in layerVisibility) {
+        layerVisibility[layerName] = !layerVisibility[layerName];
+
+        // Update map style with new visibility
+        if (map && map.isStyleLoaded()) {
+            updateMapYear(currentYear);
+        }
+
+        console.log(`Layer ${layerName} visibility:`, layerVisibility[layerName]);
+    }
+}
+
+/**
+ * Start animation through years
+ * @param {number} speed - Years per second (default: 5)
+ */
+function startAnimation(speed = 5) {
+    if (isAnimating) {
+        stopAnimation();
+        return;
+    }
+
+    isAnimating = true;
+    const startYear = currentYear;
+    const startTime = Date.now();
+    const btn = document.getElementById('playBtn');
+    if (btn) btn.textContent = 'Pause';
+
+    function animate() {
+        if (!isAnimating) return;
+
+        const elapsed = (Date.now() - startTime) / 1000; // seconds
+        const newYear = Math.floor(startYear + (elapsed * speed));
+
+        if (newYear > CONFIG.maxYear) {
+            stopAnimation();
+            return;
+        }
+
+        currentYear = newYear;
+        const slider = document.getElementById('yearSlider');
+        if (slider) slider.value = currentYear;
+
+        updateMapYear(currentYear);
+        animationFrameId = requestAnimationFrame(animate);
+    }
+
+    animate();
+}
+
+/**
+ * Stop year animation
+ */
+function stopAnimation() {
+    isAnimating = false;
+    if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+    }
+    const btn = document.getElementById('playBtn');
+    if (btn) btn.textContent = 'Play Timeline';
+}
+
+/**
+ * Update the era indicator with current year info
+ * @param {number} year - Current year
+ */
+function updateEraIndicator(year) {
+    const eraText = document.getElementById('eraText');
+    const dataSource = document.getElementById('dataSource');
+    const featureCount = document.getElementById('featureCount');
+
+    if (eraText) {
+        let era = '';
+        if (year < 1900) era = 'Late 19th Century';
+        else if (year < 1950) era = 'Early 20th Century';
+        else if (year < 2000) era = 'Mid-Late 20th Century';
+        else era = '21st Century';
+
+        eraText.textContent = era;
+    }
+
+    if (dataSource) {
+        let sources = [];
+        if (year < 1950) sources.push('Kartverket Historical Maps');
+        if (year >= 1950) sources.push('OpenStreetMap');
+        dataSource.textContent = sources.join(', ') || 'Mixed Sources';
+    }
+
+    // Feature count would require querying rendered features
+    // This is a placeholder that can be enhanced
+    if (featureCount && map && map.isStyleLoaded()) {
+        try {
+            const features = map.queryRenderedFeatures();
+            const buildings = features.filter(f => f.sourceLayer === 'building');
+            featureCount.textContent = `~${buildings.length} features visible`;
+        } catch (e) {
+            featureCount.textContent = 'Loading...';
+        }
     }
 }
 
@@ -387,6 +604,11 @@ function initControls() {
     slider.addEventListener('input', (e) => {
         const year = parseInt(e.target.value);
         yearDisplay.textContent = year;
+
+        // Stop animation if slider is manually moved
+        if (isAnimating) {
+            stopAnimation();
+        }
     });
 
     // Handle slider change (fires when user releases)
@@ -394,6 +616,50 @@ function initControls() {
         const year = parseInt(e.target.value);
         updateMapYear(year);
     });
+
+    // Play/Pause button
+    const playBtn = document.getElementById('playBtn');
+    if (playBtn) {
+        playBtn.addEventListener('click', () => {
+            if (isAnimating) {
+                stopAnimation();
+            } else {
+                // Reset to start if at end
+                if (currentYear >= CONFIG.maxYear) {
+                    currentYear = CONFIG.minYear;
+                    slider.value = currentYear;
+                }
+                startAnimation(5);
+            }
+        });
+    }
+
+    // Layer toggle buttons
+    const layerToggles = {
+        'buildingsToggle': 'buildings',
+        'roadsToggle': 'roads',
+        'waterToggle': 'water',
+        'confidenceToggle': 'confidenceOverlay'
+    };
+
+    Object.entries(layerToggles).forEach(([btnId, layerName]) => {
+        const btn = document.getElementById(btnId);
+        if (btn) {
+            btn.addEventListener('click', () => {
+                toggleLayer(layerName);
+                // Update button state
+                const isVisible = layerVisibility[layerName];
+                btn.classList.toggle('active', isVisible);
+                btn.setAttribute('aria-pressed', isVisible);
+            });
+            // Set initial state
+            btn.classList.toggle('active', layerVisibility[layerName]);
+            btn.setAttribute('aria-pressed', layerVisibility[layerName]);
+        }
+    });
+
+    // Update era indicator initially
+    updateEraIndicator(currentYear);
 
     console.log('Controls initialized');
 }

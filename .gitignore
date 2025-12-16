@@ -1,2 +1,10 @@
 *.pyc
 __pycache__/
+
+# Large data files (download with scripts)
+data/planetiler.jar
+data/trondheim.osm.pbf
+data/trondheim.pmtiles
+data/data/
+*.zip
+*.jar

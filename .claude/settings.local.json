@@ -37,7 +37,19 @@
       "Bash(brew install:*)",
       "Bash(export PATH=\"/opt/homebrew/opt/openjdk@17/bin:$PATH\")",
       "Bash(./scripts/download_osm.sh)",
-      "Bash(git commit -m \"$(cat <<''EOF''\nImplement Phase 4: Real Data Integration\n\nKartverket Data Pipeline:\n- download_kartverket.py: Fetch historical maps via Geonorge API\n- georeference.py: Align maps with GDAL, GCP support, RMS quality\n- tile_maps.py: Cut into ML-ready tiles with geo-coordinates\n\nAnnotation Tools:\n- annotation_helper.py: Tkinter GUI for manual labeling\n- annotation_progress.py: Track annotation statistics\n- Keyboard shortcuts, brush tools, model prediction overlay\n\nFine-tuning & Extraction:\n- fine_tune.py: Adapt model to real data (lower LR, encoder freezing)\n- batch_extract.py: Process all tiles, vectorize to GeoJSON\n- Temporal attributes (start_date, end_date) from map metadata\n\nValidation:\n- validate_phase4.sh: Comprehensive Phase 4 checks\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")"
+      "Bash(git commit -m \"$(cat <<''EOF''\nImplement Phase 4: Real Data Integration\n\nKartverket Data Pipeline:\n- download_kartverket.py: Fetch historical maps via Geonorge API\n- georeference.py: Align maps with GDAL, GCP support, RMS quality\n- tile_maps.py: Cut into ML-ready tiles with geo-coordinates\n\nAnnotation Tools:\n- annotation_helper.py: Tkinter GUI for manual labeling\n- annotation_progress.py: Track annotation statistics\n- Keyboard shortcuts, brush tools, model prediction overlay\n\nFine-tuning & Extraction:\n- fine_tune.py: Adapt model to real data (lower LR, encoder freezing)\n- batch_extract.py: Process all tiles, vectorize to GeoJSON\n- Temporal attributes (start_date, end_date) from map metadata\n\nValidation:\n- validate_phase4.sh: Comprehensive Phase 4 checks\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(./scripts/generate_tiles.sh:*)",
+      "Bash(curl:*)",
+      "Bash(osmium sort:*)",
+      "Bash(osmium extract:*)",
+      "Bash(./scripts/validate_phase5.sh:*)",
+      "Bash(wc:*)",
+      "Bash(source venv/bin/activate)",
+      "Bash(pip install:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nImplement Phase 5: Production Deployment\n\nData Merging & Tiles:\n- merge_data.py: Combine OSM + historical with deduplication\n- generate_pmtiles.sh: Create optimized tiles (z8-z16)\n- Consistent temporal schema (start_date, end_date, source)\n\nFrontend Enhancements:\n- Historical styling (sepia colors for pre-1950)\n- Era indicator with active data sources\n- Timeline animation (play through history)\n- Layer toggles (buildings, roads, water, confidence)\n- Mobile responsive design\n- about.html methodology page\n\nDeployment Infrastructure:\n- Dockerfile with nginx:alpine\n- docker-compose.prod.yml with health checks\n- deploy-github-pages.sh\n- deploy-cloudflare.sh for R2 hosting\n\nDocumentation:\n- docs/user_guide.md\n- docs/methodology.md  \n- docs/data_sources.md\n- Updated README.md with quick start\n\nValidation:\n- validate_phase5.sh with 39 checks\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(python:*)",
+      "Bash(git reset:*)",
+      "Bash(git rm:*)"
     ]
   }
 }

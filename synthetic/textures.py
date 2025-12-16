@@ -102,6 +102,12 @@ class TextureGenerator:
         from scipy.ndimage import zoom
         try:
             noise = zoom(grid, (height / grid_h, width / grid_w), order=1)
+            # Ensure exact output size (zoom can produce off-by-one errors)
+            noise = noise[:height, :width]
+            if noise.shape[0] < height or noise.shape[1] < width:
+                padded = np.zeros((height, width), dtype=np.float32)
+                padded[:noise.shape[0], :noise.shape[1]] = noise
+                noise = padded
         except ImportError:
             # Fallback if scipy not available - use simple nearest neighbor
             noise = np.repeat(np.repeat(grid, frequency, axis=0), frequency, axis=1)
