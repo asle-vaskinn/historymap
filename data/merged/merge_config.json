@@ -1,0 +1,160 @@
+{
+  "$schema": "../schemas/merge_config.schema.json",
+  "version": "1.0",
+  "created": "2024-01-01",
+  "description": "Development merge configuration for Trondheim historical map",
+
+  "sources": {
+    "manual": {
+      "enabled": true,
+      "path": "../sources/manual/normalized/buildings.geojson",
+      "priority": 0,
+      "date_priority": 0,
+      "trust_dates": true,
+      "evidence_strength": "high",
+      "notes": "Manually researched buildings with full provenance. Highest priority - researcher verified data."
+    },
+    "finn": {
+      "enabled": true,
+      "path": "../sources/finn/normalized/buildings.geojson",
+      "priority": 1,
+      "date_priority": 1,
+      "trust_dates": true,
+      "evidence_strength": "medium",
+      "match_by": ["osm_ref", "spatial"],
+      "notes": "Finn.no property listings with construction years. Exact dates, higher priority than SEFRAK 10-year ranges."
+    },
+    "sefrak": {
+      "enabled": true,
+      "path": "../sources/sefrak/normalized/buildings.geojson",
+      "priority": 2,
+      "date_priority": 2,
+      "trust_dates": true,
+      "evidence_strength": "high",
+      "notes": "Official heritage registry, 10-year resolution dates (midpoint used)"
+    },
+    "fkb_bygning": {
+      "enabled": false,
+      "path": "../sources/fkb_bygning/normalized/buildings.geojson",
+      "priority": 3,
+      "date_priority": 5,
+      "trust_dates": false,
+      "evidence_strength": "high",
+      "notes": "Kartverket official cadastral data. Requires Norge digitalt partnership for access. Enable when data is manually downloaded."
+    },
+    "trondheim_kommune": {
+      "enabled": false,
+      "path": "../sources/trondheim_kommune/normalized/buildings.geojson",
+      "priority": 4,
+      "date_priority": 3,
+      "trust_dates": true,
+      "evidence_strength": "high",
+      "notes": "Municipal building permits with dates"
+    },
+    "matrikkelen": {
+      "enabled": false,
+      "path": "../sources/matrikkelen/normalized/buildings.geojson",
+      "priority": 5,
+      "date_priority": 4,
+      "trust_dates": true,
+      "evidence_strength": "high",
+      "notes": "API integration pending - may have construction dates"
+    },
+    "ml_kartverket_1880": {
+      "enabled": true,
+      "path": "../sources/ml_detected/kartverket_1880/normalized/buildings.geojson",
+      "priority": 10,
+      "date_priority": 100,
+      "trust_dates": false,
+      "date_represents": "not_later_than",
+      "reference_year": 1880,
+      "evidence_strength": "high"
+    },
+    "ml_kartverket_1904": {
+      "enabled": false,
+      "path": "../sources/ml_detected/kartverket_1904/normalized/buildings.geojson",
+      "priority": 11,
+      "date_priority": 101,
+      "trust_dates": false,
+      "date_represents": "not_later_than",
+      "reference_year": 1904,
+      "evidence_strength": "high",
+      "notes": "Model needs fine-tuning for this map style"
+    },
+    "ml_aerial_1947": {
+      "enabled": false,
+      "path": "../sources/ml_detected/aerial_1947/normalized/buildings.geojson",
+      "priority": 12,
+      "date_priority": 102,
+      "trust_dates": false,
+      "date_represents": "not_later_than",
+      "reference_year": 1947,
+      "evidence_strength": "high",
+      "notes": "Aerial photos require authentication"
+    },
+    "osm": {
+      "enabled": true,
+      "path": "../sources/osm/normalized/buildings.geojson",
+      "priority": 6,
+      "date_priority": 6,
+      "trust_dates": "if_explicit",
+      "evidence_strength": "medium",
+      "evidence_strength_with_date": "high",
+      "geometry_role": "primary",
+      "notes": "Primary current geometry source. Community-sourced with good coverage. User-added start_date tags are high evidence."
+    }
+  },
+
+  "geometry_preference": {
+    "order": ["osm", "manual", "sefrak", "finn"],
+    "prefer_polygons": true,
+    "notes": "Prefer OSM polygon geometry over point geometries from other sources"
+  },
+
+  "matching": {
+    "method": "spatial_overlap",
+    "overlap_threshold": 0.5,
+    "centroid_max_distance_m": 10,
+    "prefer_larger_geometry": true
+  },
+
+  "conflict_resolution": {
+    "date_conflict": {
+      "sd": "use_date_priority",
+      "ed": "ignore",
+      "notes": "For sd (construction year): use source with lowest date_priority. For ed: ignore conflicts for now."
+    },
+    "geometry_conflict": "prefer_osm_polygon",
+    "merge_evidence": true,
+    "preserve_all_source_ids": true,
+    "track_all_dates": true
+  },
+
+  "replacement_detection": {
+    "enabled": true,
+    "overlap_threshold": 0.5,
+    "centroid_max_distance_m": 10,
+    "infer_demolition_offset": 0,
+    "_comment_demolition_offset": "0 = demolished same year as new building built, -1 = demolished year before",
+    "rules": [
+      {
+        "era": "pre_1900",
+        "old_building_hidden_when": "new_building_evidence >= high"
+      },
+      {
+        "era": "1900_1950",
+        "old_building_hidden_when": "new_building_evidence >= medium"
+      },
+      {
+        "era": "post_1950",
+        "old_building_hidden_when": "new_building_exists"
+      }
+    ]
+  },
+
+  "output": {
+    "include_source_breakdown": true,
+    "preserve_all_sources": true,
+    "output_file": "buildings_merged.geojson"
+  }
+}
