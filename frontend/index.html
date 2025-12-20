@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trondheim Historical Map - Explore 175 Years of History</title>
-    <meta name="description" content="Interactive historical map of Trondheim, Norway from 1850 to present. Explore how buildings, roads, and the city evolved over 175 years using ML-extracted features from historical maps.">
+    <title>Trondheim Historical Map - Explore 300+ Years of History</title>
+    <meta name="description" content="Interactive historical map of Trondheim, Norway from 1700 to present. Explore how buildings, roads, and the city evolved over 300 years using data from SEFRAK, Kartverket, and OpenStreetMap.">
     <meta name="keywords" content="Trondheim, historical map, Norway, cartography, OpenStreetMap, Kartverket, time-travel map">
     <meta name="author" content="Trondheim Historical Map Project">
 
@@ -34,133 +34,236 @@
 <body>
     <div id="map"></div>
 
-    <!-- Time Controls Overlay -->
+    <!-- Controls Panel -->
     <div class="controls-container">
-        <div class="controls-header">
+        <!-- Compact Header with Year + Slider -->
+        <div class="controls-header-compact">
             <h1>Trondheim Historical Map</h1>
-            <div class="year-display">
-                <span class="year-label">Year:</span>
+            <div class="year-slider-row">
                 <span class="year-value" id="currentYear">2020</span>
-            </div>
-        </div>
-
-        <!-- Era Indicator -->
-        <div class="era-indicator">
-            <h3>Current Era</h3>
-            <div class="era-info">
-                <strong>Period:</strong> <span id="eraText">21st Century</span>
-            </div>
-            <div class="era-info">
-                <strong>Sources:</strong> <span id="dataSource">OpenStreetMap</span>
-            </div>
-            <div class="era-info">
-                <strong>Features:</strong> <span id="featureCount">Loading...</span>
-            </div>
-        </div>
-
-        <!-- Time Slider -->
-        <div class="slider-container">
-            <label for="yearSlider" class="slider-label">
-                <span class="year-min">1850</span>
+                <button id="playBtn" class="play-btn" aria-label="Play timeline animation" title="Play timeline">▶</button>
                 <input
                     type="range"
                     id="yearSlider"
-                    min="1850"
+                    min="1700"
                     max="2025"
                     value="2020"
                     step="1"
                     class="year-slider"
                     aria-label="Select year"
                 />
-                <span class="year-max">2025</span>
-            </label>
-        </div>
-
-        <!-- Animation Controls -->
-        <div class="animation-controls">
-            <button id="playBtn" class="btn" aria-label="Play timeline animation">
-                Play Timeline
-            </button>
-        </div>
-
-        <!-- Layer Toggles -->
-        <div class="layer-toggles">
-            <h3>Visible Layers</h3>
-            <div class="toggle-buttons">
-                <button id="buildingsToggle" class="toggle-btn active" aria-pressed="true">
-                    Buildings
-                </button>
-                <button id="roadsToggle" class="toggle-btn active" aria-pressed="true">
-                    Roads
-                </button>
-                <button id="waterToggle" class="toggle-btn active" aria-pressed="true">
-                    Water
-                </button>
-                <button id="confidenceToggle" class="toggle-btn" aria-pressed="false">
-                    Show Confidence
-                </button>
             </div>
         </div>
 
-        <!-- Info Panel with Enhanced Legend -->
-        <div class="info-panel">
-            <div class="legend">
-                <h3>Legend</h3>
+        <!-- Scrollable Filter Sections -->
+        <div class="filter-sections">
 
-                <div class="legend-section">
-                    <div class="legend-section-title">Modern Features (1950+)</div>
-                    <div class="legend-item">
-                        <span class="legend-color" style="background-color: #d4a373;"></span>
-                        <span>Buildings</span>
-                    </div>
-                    <div class="legend-item">
-                        <span class="legend-color" style="background-color: #888888;"></span>
-                        <span>Roads</span>
-                    </div>
-                    <div class="legend-item">
-                        <span class="legend-color" style="background-color: #4a90e2;"></span>
-                        <span>Water</span>
-                    </div>
-                    <div class="legend-item">
-                        <span class="legend-color" style="background-color: #7fb069;"></span>
-                        <span>Green Spaces</span>
-                    </div>
+            <!-- Buildings Section (expanded by default) -->
+            <div class="filter-section" id="buildingsSection">
+                <div class="filter-section-header" data-section="buildings">
+                    <span class="section-icon">▼</span>
+                    <h3>Buildings</h3>
                 </div>
+                <div class="filter-section-content">
+                    <!-- Date Sources -->
+                    <div class="source-chips">
+                        <label class="source-chip" title="SEFRAK registry">
+                            <input type="checkbox" id="src-sef" checked data-date-source="sef">
+                            <span class="chip-color" style="background-color: #8b6914;"></span>
+                            <span class="chip-label">SEFRAK</span>
+                        </label>
+                        <label class="source-chip" title="Matrikkelen official">
+                            <input type="checkbox" id="src-mat" checked data-date-source="mat">
+                            <span class="chip-color" style="background-color: #1565c0;"></span>
+                            <span class="chip-label">Mat</span>
+                        </label>
+                        <label class="source-chip" title="Trondheim Kommune">
+                            <input type="checkbox" id="src-tk" checked data-date-source="tk">
+                            <span class="chip-color" style="background-color: #2e7d32;"></span>
+                            <span class="chip-label">TK</span>
+                        </label>
+                        <label class="source-chip" title="Manual verified">
+                            <input type="checkbox" id="src-man" checked data-date-source="man">
+                            <span class="chip-color" style="background-color: #2ecc71;"></span>
+                            <span class="chip-label">Man</span>
+                        </label>
+                        <label class="source-chip" title="Finn.no listings">
+                            <input type="checkbox" id="src-finn" checked data-date-source="finn">
+                            <span class="chip-color" style="background-color: #e91e63;"></span>
+                            <span class="chip-label">Finn</span>
+                        </label>
+                        <label class="source-chip" title="OpenStreetMap">
+                            <input type="checkbox" id="src-osm" checked data-date-source="osm">
+                            <span class="chip-color" style="background-color: #d4a373;"></span>
+                            <span class="chip-label">OSM</span>
+                        </label>
+                    </div>
 
-                <div class="legend-section">
-                    <div class="legend-section-title">Historical Features (pre-1950)</div>
-                    <div class="legend-item">
-                        <span class="legend-color historical" style="background-color: #b89968;"></span>
-                        <span>Old Buildings (sepia tones)</span>
+                    <!-- Snapshots subsection -->
+                    <div class="subsection-header">
+                        <span>Snapshots</span>
+                        <button id="inspectSnapshotsBtn" class="mini-btn" title="Inspect">🔍</button>
                     </div>
-                    <div class="legend-item">
-                        <span class="legend-color historical" style="background-color: #6b9bc3;"></span>
-                        <span>Historical Water Bodies</span>
-                    </div>
-                </div>
-
-                <div class="legend-section">
-                    <div class="legend-section-title">Confidence Overlay</div>
-                    <div class="legend-item">
-                        <span class="legend-color" style="background-color: #00ff00;"></span>
-                        <span>High (0.7-1.0)</span>
-                    </div>
-                    <div class="legend-item">
-                        <span class="legend-color" style="background-color: #ffff00;"></span>
-                        <span>Medium (0.4-0.7)</span>
-                    </div>
-                    <div class="legend-item">
-                        <span class="legend-color" style="background-color: #ff0000;"></span>
-                        <span>Low (0.0-0.4)</span>
+                    <div class="source-chips">
+                        <label class="source-chip snapshot" title="Kartverket 1880">
+                            <input type="checkbox" id="snap-kv1880" checked data-snapshot-source="kv1880">
+                            <span class="chip-color" style="background-color: #8b4513;"></span>
+                            <span class="chip-label">1880</span>
+                        </label>
+                        <label class="source-chip snapshot" title="Kartverket 1904">
+                            <input type="checkbox" id="snap-kv1904" data-snapshot-source="kv1904">
+                            <span class="chip-color" style="background-color: #6b4423;"></span>
+                            <span class="chip-label">1904</span>
+                        </label>
+                        <label class="source-chip snapshot" title="Aerial 1947">
+                            <input type="checkbox" id="snap-air1947" data-snapshot-source="air1947">
+                            <span class="chip-color" style="background-color: #5a3d2b;"></span>
+                            <span class="chip-label">1947</span>
+                        </label>
+                        <a href="source_viewer.html" class="mini-btn" title="View details">→</a>
                     </div>
                 </div>
             </div>
 
-            <a href="about.html" class="about-link">Learn More About This Project</a>
+            <!-- Roads Section (collapsed by default) -->
+            <div class="filter-section collapsed" id="roadsSection">
+                <div class="filter-section-header" data-section="roads">
+                    <span class="section-icon">▶</span>
+                    <h3>Roads</h3>
+                </div>
+                <div class="filter-section-content">
+                    <div class="source-chips">
+                        <label class="source-chip" title="NVDB (Statens vegvesen)">
+                            <input type="checkbox" id="road-src-nvdb" checked data-road-source="nvdb">
+                            <span class="chip-color" style="background-color: #e67e22;"></span>
+                            <span class="chip-label">NVDB</span>
+                        </label>
+                        <label class="source-chip" title="Kulturminnesøk">
+                            <input type="checkbox" id="road-src-kult" checked data-road-source="kult">
+                            <span class="chip-color" style="background-color: #8b4513;"></span>
+                            <span class="chip-label">Kult</span>
+                        </label>
+                        <label class="source-chip" title="OpenStreetMap">
+                            <input type="checkbox" id="road-src-osm" checked data-road-source="osm">
+                            <span class="chip-color" style="background-color: #888888;"></span>
+                            <span class="chip-label">OSM</span>
+                        </label>
+                    </div>
+                    <div class="subsection-header">
+                        <span>ML-Detected</span>
+                    </div>
+                    <div class="source-chips">
+                        <label class="source-chip snapshot" title="Kartverket 1880">
+                            <input type="checkbox" id="road-src-ml_kv1880" checked data-road-source="ml_kv1880">
+                            <span class="chip-color" style="background-color: #4a5568;"></span>
+                            <span class="chip-label">1880</span>
+                        </label>
+                        <label class="source-chip snapshot" title="Kartverket 1904">
+                            <input type="checkbox" id="road-src-ml_kv1904" checked data-road-source="ml_kv1904">
+                            <span class="chip-color" style="background-color: #718096;"></span>
+                            <span class="chip-label">1904</span>
+                        </label>
+                        <label class="source-chip snapshot" title="Aerial 1947">
+                            <input type="checkbox" id="road-src-ml_air1947" checked data-road-source="ml_air1947">
+                            <span class="chip-color" style="background-color: #a0aec0;"></span>
+                            <span class="chip-label">1947</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
 
-            <p class="info-text" style="margin-top: 15px; font-size: 11px; color: #6c757d;">
-                Data: © OpenStreetMap contributors | Kartverket
-            </p>
+            <!-- Base Map Section (collapsed by default) -->
+            <div class="filter-section collapsed" id="baseMapSection">
+                <div class="filter-section-header" data-section="basemap">
+                    <span class="section-icon">▶</span>
+                    <h3>Base Map</h3>
+                </div>
+                <div class="filter-section-content">
+                    <div class="source-chips">
+                        <label class="source-chip" title="Water bodies">
+                            <input type="checkbox" id="toggle-water" checked data-layer="water">
+                            <span class="chip-color" style="background-color: #4a90e2;"></span>
+                            <span class="chip-label">Water</span>
+                        </label>
+                        <label class="source-chip" title="Green spaces">
+                            <input type="checkbox" id="toggle-landuse" checked data-layer="landuse">
+                            <span class="chip-color" style="background-color: #7fb069;"></span>
+                            <span class="chip-label">Parks</span>
+                        </label>
+                        <label class="source-chip" title="Place labels">
+                            <input type="checkbox" id="toggle-labels" checked data-layer="labels">
+                            <span class="chip-color" style="background-color: #333;"></span>
+                            <span class="chip-label">Labels</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+        </div><!-- End filter-sections -->
+
+        <!-- Compact Footer -->
+        <div class="controls-footer">
+            <a href="about.html" class="about-link-mini">About</a>
+            <span class="data-credit">© OSM | SEFRAK | Kartverket</span>
+        </div>
+    </div>
+
+    <!-- Source Inspection Mode Selector (small button) -->
+    <div class="inspection-selector-mini">
+        <button id="inspectMlBtn" class="inspect-ml-btn" title="Inspect ML detections">
+            🔍 ML
+        </button>
+        <div class="inspection-dropdown" id="inspectionDropdown">
+            <div class="inspection-buttons">
+                <span class="inspection-loading">Loading...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Source Inspection Mode Overlay (shown when active) -->
+    <div id="inspectionOverlay" class="inspection-overlay">
+        <div class="inspection-header">
+            <h2>Source Inspection</h2>
+            <button class="inspection-close" onclick="exitInspectionMode()">&times;</button>
+        </div>
+        <div class="inspection-content">
+            <div class="inspection-source">
+                <span class="label">Viewing:</span>
+                <span id="inspectionSourceName" class="source-name">-</span>
+            </div>
+
+            <div id="inspectionStats" class="inspection-stats">
+                <div class="stat-row">
+                    <span class="stat-label">Buildings:</span>
+                    <span class="stat-value">-</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Roads:</span>
+                    <span class="stat-value">-</span>
+                </div>
+            </div>
+
+            <div class="confidence-legend">
+                <h4>Confidence</h4>
+                <div class="confidence-scale">
+                    <span class="conf-low">0%</span>
+                    <div class="conf-gradient"></div>
+                    <span class="conf-high">100%</span>
+                </div>
+                <div class="conf-labels">
+                    <span style="color: #ff0000;">Low</span>
+                    <span style="color: #ffaa00;">Med</span>
+                    <span style="color: #00ff00;">High</span>
+                </div>
+            </div>
+
+            <div class="inspection-controls">
+                <label class="opacity-control">
+                    <span>Map Opacity:</span>
+                    <input type="range" id="historicalMapOpacity" min="0" max="100" value="70"
+                           onchange="updateHistoricalMapOpacity(this.value)">
+                </label>
+            </div>
         </div>
     </div>
 
