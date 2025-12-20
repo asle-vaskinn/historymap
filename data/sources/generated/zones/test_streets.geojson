@@ -1,0 +1,49 @@
+{
+  "type": "FeatureCollection",
+  "name": "test_streets_1880",
+  "description": "Test street network for procedural building generation",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "street_001",
+        "name": "Main street EW (zone 1)"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [10.3945, 63.4312],
+          [10.3985, 63.4312]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "street_002",
+        "name": "Cross street NS (zone 1)"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [10.3965, 63.4302],
+          [10.3965, 63.4323]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "street_003",
+        "name": "Main street EW (zone 2)"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [10.4015, 63.4287],
+          [10.4055, 63.4287]
+        ]
+      }
+    }
+  ]
+}

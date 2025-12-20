@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Source Viewer - Trondheim Historical Map</title>
+
+    <!-- MapLibre GL JS -->
+    <script src="https://unpkg.com/maplibre-gl@4.0.0/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@4.0.0/dist/maplibre-gl.css" rel="stylesheet" />
+
+    <link rel="stylesheet" href="source_viewer.css">
+</head>
+<body>
+    <!-- Header Bar -->
+    <div class="header">
+        <div class="header-left">
+            <a href="index.html" class="back-link">&larr; Back to Map</a>
+            <h1>Data Source Viewer</h1>
+            <a href="#" id="viewOnMapLink" class="view-on-map-link" title="View this source on the main map">View on Map →</a>
+        </div>
+        <div class="header-center">
+            <label for="sourceSelect">Source:</label>
+            <select id="sourceSelect">
+                <option value="amt1">Amtskart (1870-1920)</option>
+                <option value="gen1880">Generated 1880 (PoC)</option>
+                <option value="ortofoto1937">Flyfoto 1937</option>
+                <option value="ortofoto2006">Flyfoto 2006</option>
+                <option value="ortofoto2023">Flyfoto 2023</option>
+            </select>
+        </div>
+        <div class="header-right">
+            <span class="stats" id="stats">Loading...</span>
+            <span class="annotation-stats">
+                <span id="annotationCount">0 annotated</span>
+                <button id="exportBtn" onclick="exportAnnotations()" title="Export annotations">Export</button>
+            </span>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Map Container -->
+        <div id="map"></div>
+
+        <!-- ML Actions Panel -->
+        <div class="ml-panel">
+            <div class="ml-panel-header">
+                <h2>ML Pipeline</h2>
+            </div>
+
+            <!-- Training Section -->
+            <div class="ml-section">
+                <h3>Training Data</h3>
+                <div class="ml-stats">
+                    <span id="tilesCount">0</span> tiles
+                </div>
+                <button class="ml-button" id="generateMoreBtn" onclick="generateMoreTraining()">
+                    + Generate More
+                </button>
+            </div>
+
+            <!-- Model Section -->
+            <div class="ml-section">
+                <h3>Model</h3>
+                <div class="ml-stats">
+                    IoU: <span id="modelIoU">-</span>
+                </div>
+                <button class="ml-button primary" id="retrainBtn" onclick="retrain()">
+                    Retrain Model
+                </button>
+            </div>
+
+            <!-- Verification Section -->
+            <div class="ml-section">
+                <h3>Verification</h3>
+                <div class="ml-stats" id="verificationStats">
+                    <div><span style="color:#22c55e">■</span> <span id="existedCount">0</span> existed</div>
+                    <div><span style="color:#eab308">■</span> <span id="lowConfCount">0</span> low confidence</div>
+                    <div><span style="color:#ef4444">■</span> <span id="notExistedCount">0</span> not existed</div>
+                </div>
+                <button class="ml-button" id="verifyBtn" onclick="verify()">
+                    Run Verification
+                </button>
+            </div>
+
+            <!-- Annotations Section -->
+            <div class="ml-section">
+                <h3>Annotations</h3>
+                <div class="ml-stats">
+                    <span id="annotationsCount">0</span> manual annotations
+                </div>
+                <div class="ml-button-group">
+                    <button class="ml-button primary" id="applyBtn" onclick="applyAnnotations()">
+                        Apply to Training
+                    </button>
+                    <button class="ml-button" id="exportAnnotationsBtn" onclick="exportAnnotations()">
+                        Export
+                    </button>
+                </div>
+            </div>
+
+            <!-- Job Status -->
+            <div class="ml-section job-status" id="jobStatus" style="display: none;">
+                <h3>Job Status</h3>
+                <div class="job-progress">
+                    <div class="job-spinner"></div>
+                    <span id="jobStatusText">Running...</span>
+                </div>
+            </div>
+
+            <!-- Log Output -->
+            <div class="ml-section log-section">
+                <div class="log-header" onclick="toggleLogs()">
+                    <h3>Logs</h3>
+                    <span class="log-toggle">▼</span>
+                </div>
+                <div class="log-output collapsed" id="logOutput">
+                    <div class="log-content" id="logContent">No logs yet</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="source_viewer.js"></script>
+</body>
+</html>
