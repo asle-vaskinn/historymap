@@ -55,151 +55,43 @@
             </div>
         </div>
 
-        <!-- Scrollable Filter Sections -->
-        <div class="filter-sections">
+        <!-- Minimal Layer Toggles -->
+        <div class="layer-toggles">
+            <button id="toggleBuildings" class="layer-toggle active" title="Toggle buildings">
+                <span class="toggle-icon">🏠</span>
+                <span class="toggle-label">Buildings</span>
+            </button>
+            <button id="toggleRoads" class="layer-toggle active" title="Toggle roads">
+                <span class="toggle-icon">🛤</span>
+                <span class="toggle-label">Roads</span>
+            </button>
+            <button id="toggleSnapshots" class="layer-toggle" title="Show historical snapshots">
+                <span class="toggle-icon">📷</span>
+                <span class="toggle-label">1880</span>
+            </button>
+        </div>
 
-            <!-- Buildings Section (expanded by default) -->
-            <div class="filter-section" id="buildingsSection">
-                <div class="filter-section-header" data-section="buildings">
-                    <span class="section-icon">▼</span>
-                    <h3>Buildings</h3>
-                </div>
-                <div class="filter-section-content">
-                    <!-- Date Sources -->
-                    <div class="source-chips">
-                        <label class="source-chip" title="SEFRAK registry">
-                            <input type="checkbox" id="src-sef" checked data-date-source="sef">
-                            <span class="chip-color" style="background-color: #8b6914;"></span>
-                            <span class="chip-label">SEFRAK</span>
-                        </label>
-                        <label class="source-chip" title="Matrikkelen official">
-                            <input type="checkbox" id="src-mat" checked data-date-source="mat">
-                            <span class="chip-color" style="background-color: #1565c0;"></span>
-                            <span class="chip-label">Mat</span>
-                        </label>
-                        <label class="source-chip" title="Trondheim Kommune">
-                            <input type="checkbox" id="src-tk" checked data-date-source="tk">
-                            <span class="chip-color" style="background-color: #2e7d32;"></span>
-                            <span class="chip-label">TK</span>
-                        </label>
-                        <label class="source-chip" title="Manual verified">
-                            <input type="checkbox" id="src-man" checked data-date-source="man">
-                            <span class="chip-color" style="background-color: #2ecc71;"></span>
-                            <span class="chip-label">Man</span>
-                        </label>
-                        <label class="source-chip" title="Finn.no listings">
-                            <input type="checkbox" id="src-finn" checked data-date-source="finn">
-                            <span class="chip-color" style="background-color: #e91e63;"></span>
-                            <span class="chip-label">Finn</span>
-                        </label>
-                        <label class="source-chip" title="OpenStreetMap">
-                            <input type="checkbox" id="src-osm" checked data-date-source="osm">
-                            <span class="chip-color" style="background-color: #d4a373;"></span>
-                            <span class="chip-label">OSM</span>
-                        </label>
-                    </div>
-
-                    <!-- Snapshots subsection -->
-                    <div class="subsection-header">
-                        <span>Snapshots</span>
-                        <button id="inspectSnapshotsBtn" class="mini-btn" title="Inspect">🔍</button>
-                    </div>
-                    <div class="source-chips">
-                        <label class="source-chip snapshot" title="Kartverket 1880">
-                            <input type="checkbox" id="snap-kv1880" checked data-snapshot-source="kv1880">
-                            <span class="chip-color" style="background-color: #8b4513;"></span>
-                            <span class="chip-label">1880</span>
-                        </label>
-                        <label class="source-chip snapshot" title="Kartverket 1904">
-                            <input type="checkbox" id="snap-kv1904" data-snapshot-source="kv1904">
-                            <span class="chip-color" style="background-color: #6b4423;"></span>
-                            <span class="chip-label">1904</span>
-                        </label>
-                        <label class="source-chip snapshot" title="Aerial 1947">
-                            <input type="checkbox" id="snap-air1947" data-snapshot-source="air1947">
-                            <span class="chip-color" style="background-color: #5a3d2b;"></span>
-                            <span class="chip-label">1947</span>
-                        </label>
-                        <a href="source_viewer.html" class="mini-btn" title="View details">→</a>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Roads Section (collapsed by default) -->
-            <div class="filter-section collapsed" id="roadsSection">
-                <div class="filter-section-header" data-section="roads">
-                    <span class="section-icon">▶</span>
-                    <h3>Roads</h3>
-                </div>
-                <div class="filter-section-content">
-                    <div class="source-chips">
-                        <label class="source-chip" title="NVDB (Statens vegvesen)">
-                            <input type="checkbox" id="road-src-nvdb" checked data-road-source="nvdb">
-                            <span class="chip-color" style="background-color: #e67e22;"></span>
-                            <span class="chip-label">NVDB</span>
-                        </label>
-                        <label class="source-chip" title="Kulturminnesøk">
-                            <input type="checkbox" id="road-src-kult" checked data-road-source="kult">
-                            <span class="chip-color" style="background-color: #8b4513;"></span>
-                            <span class="chip-label">Kult</span>
-                        </label>
-                        <label class="source-chip" title="OpenStreetMap">
-                            <input type="checkbox" id="road-src-osm" checked data-road-source="osm">
-                            <span class="chip-color" style="background-color: #888888;"></span>
-                            <span class="chip-label">OSM</span>
-                        </label>
-                    </div>
-                    <div class="subsection-header">
-                        <span>ML-Detected</span>
-                    </div>
-                    <div class="source-chips">
-                        <label class="source-chip snapshot" title="Kartverket 1880">
-                            <input type="checkbox" id="road-src-ml_kv1880" checked data-road-source="ml_kv1880">
-                            <span class="chip-color" style="background-color: #4a5568;"></span>
-                            <span class="chip-label">1880</span>
-                        </label>
-                        <label class="source-chip snapshot" title="Kartverket 1904">
-                            <input type="checkbox" id="road-src-ml_kv1904" checked data-road-source="ml_kv1904">
-                            <span class="chip-color" style="background-color: #718096;"></span>
-                            <span class="chip-label">1904</span>
-                        </label>
-                        <label class="source-chip snapshot" title="Aerial 1947">
-                            <input type="checkbox" id="road-src-ml_air1947" checked data-road-source="ml_air1947">
-                            <span class="chip-color" style="background-color: #a0aec0;"></span>
-                            <span class="chip-label">1947</span>
-                        </label>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Base Map Section (collapsed by default) -->
-            <div class="filter-section collapsed" id="baseMapSection">
-                <div class="filter-section-header" data-section="basemap">
-                    <span class="section-icon">▶</span>
-                    <h3>Base Map</h3>
-                </div>
-                <div class="filter-section-content">
-                    <div class="source-chips">
-                        <label class="source-chip" title="Water bodies">
-                            <input type="checkbox" id="toggle-water" checked data-layer="water">
-                            <span class="chip-color" style="background-color: #4a90e2;"></span>
-                            <span class="chip-label">Water</span>
-                        </label>
-                        <label class="source-chip" title="Green spaces">
-                            <input type="checkbox" id="toggle-landuse" checked data-layer="landuse">
-                            <span class="chip-color" style="background-color: #7fb069;"></span>
-                            <span class="chip-label">Parks</span>
-                        </label>
-                        <label class="source-chip" title="Place labels">
-                            <input type="checkbox" id="toggle-labels" checked data-layer="labels">
-                            <span class="chip-color" style="background-color: #333;"></span>
-                            <span class="chip-label">Labels</span>
-                        </label>
-                    </div>
-                </div>
-            </div>
-
-        </div><!-- End filter-sections -->
+        <!-- Hidden source checkboxes (for JS compatibility) -->
+        <div style="display:none;">
+            <input type="checkbox" id="src-sef" checked data-date-source="sef">
+            <input type="checkbox" id="src-mat" checked data-date-source="mat">
+            <input type="checkbox" id="src-tk" checked data-date-source="tk">
+            <input type="checkbox" id="src-man" checked data-date-source="man">
+            <input type="checkbox" id="src-finn" checked data-date-source="finn">
+            <input type="checkbox" id="src-osm" checked data-date-source="osm">
+            <input type="checkbox" id="snap-kv1880" checked data-snapshot-source="kv1880">
+            <input type="checkbox" id="snap-kv1904" data-snapshot-source="kv1904">
+            <input type="checkbox" id="snap-air1947" data-snapshot-source="air1947">
+            <input type="checkbox" id="road-src-nvdb" checked data-road-source="nvdb">
+            <input type="checkbox" id="road-src-kult" checked data-road-source="kult">
+            <input type="checkbox" id="road-src-osm" checked data-road-source="osm">
+            <input type="checkbox" id="road-src-ml_kv1880" checked data-road-source="ml_kv1880">
+            <input type="checkbox" id="road-src-ml_kv1904" checked data-road-source="ml_kv1904">
+            <input type="checkbox" id="road-src-ml_air1947" checked data-road-source="ml_air1947">
+            <input type="checkbox" id="toggle-water" checked data-layer="water">
+            <input type="checkbox" id="toggle-landuse" checked data-layer="landuse">
+            <input type="checkbox" id="toggle-labels" checked data-layer="labels">
+        </div>
 
         <!-- Compact Footer -->
         <div class="controls-footer">

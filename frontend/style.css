@@ -96,14 +96,58 @@ body {
     height: 4px;
 }
 
-/* ===== Scrollable Filter Sections ===== */
+/* ===== Minimal Layer Toggles ===== */
+.layer-toggles {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.layer-toggle {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 8px 4px;
+    background: #f0f0f0;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-family: inherit;
+}
+
+.layer-toggle:hover {
+    background: #e8e8e8;
+    border-color: #667eea;
+}
+
+.layer-toggle.active {
+    background: #667eea;
+    border-color: #667eea;
+    color: white;
+}
+
+.layer-toggle .toggle-icon {
+    font-size: 16px;
+}
+
+.layer-toggle .toggle-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* ===== Scrollable Filter Sections (legacy, keep for compatibility) ===== */
 .filter-sections {
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
 }
 
-/* ===== Filter Section ===== */
+/* ===== Filter Section (legacy) ===== */
 .filter-section {
     margin-bottom: 2px;
     background: #f8f9fa;
@@ -153,6 +197,40 @@ body {
 
 .filter-section.collapsed .filter-section-content {
     display: none;
+}
+
+/* ===== Filter Mode Button ===== */
+.filter-mode-btn {
+    display: inline-block;
+    padding: 6px 12px;
+    margin-bottom: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #495057;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.filter-mode-btn:hover {
+    border-color: #667eea;
+    color: #667eea;
+}
+
+.filter-mode-btn.active {
+    background: #667eea;
+    border-color: #667eea;
+    color: white;
+}
+
+.source-filter-panel {
+    padding: 8px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    border: 1px dashed #dee2e6;
 }
 
 /* ===== Source Chips ===== */

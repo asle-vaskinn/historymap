@@ -70,6 +70,11 @@ let snapshotFilter = {
 let sourceFilter = dateSourceFilter;
 let mlSourceFilter = snapshotFilter;
 
+// Source filter toggle (debug mode)
+// OFF (default/production): Year slider controls visibility, all sources shown
+// ON (debug): Additional source filtering - can show/hide individual sources
+let sourceFilterEnabled = false;
+
 // Road source filter
 let roadSourceFilter = {
     nvdb: true,        // NVDB official road database (with construction dates)
@@ -621,6 +626,7 @@ function createMapStyle(year) {
             },
 
             // Finn.no property listings (point markers)
+            // NOTE: FINN dates are now merged into OSM buildings - dots disabled
             {
                 id: 'finn-markers',
                 type: 'circle',
@@ -634,7 +640,7 @@ function createMapStyle(year) {
                     ]
                 ],
                 layout: {
-                    'visibility': (layerVisibility.buildings && dateSourceFilter.finn) ? 'visible' : 'none'
+                    'visibility': 'none'  // Disabled - FINN data now merged into buildings
                 },
                 paint: {
                     'circle-radius': 8,
@@ -783,53 +789,70 @@ function createMlSourceFilter() {
  * @returns {array} MapLibre filter expression
  */
 function createBuildingFilter(year) {
+    // Temporal filter: building existed at the given year
+    // Case 1: Building has sd - show if sd <= year AND (no ed OR ed >= year)
+    // Case 2: Building has no sd - fallback: show only for years >= 1960
+    // Note: Using legacy filter syntax (property names as strings)
+    // Note: Buildings use '_src' field (with underscore)
+    const FALLBACK_YEAR = 1960;
+
+    const hasDateFilter = [
+        'all',
+        ['has', 'sd'],
+        ['<=', 'sd', year],
+        ['any',
+            ['!has', 'ed'],
+            ['>=', 'ed', year]
+        ]
+    ];
+
+    // Build temporal filter - include undated buildings only if year >= fallback
+    let temporalFilter;
+    if (year >= FALLBACK_YEAR) {
+        // Show buildings with dates OR buildings without dates
+        temporalFilter = ['any', hasDateFilter, ['!has', 'sd']];
+    } else {
+        // Only show buildings with dates in range
+        temporalFilter = hasDateFilter;
+    }
+
+    // If source filter is disabled (production mode), just apply temporal filter
+    if (!sourceFilterEnabled) {
+        return temporalFilter;
+    }
+
+    // === When filter is enabled, also apply source filtering ===
     const conditions = [];
 
-    // === Type A: Date Sources (timeline-aware) ===
+    // Type A: Date Sources (timeline-aware)
     const enabledDateSources = Object.entries(dateSourceFilter)
         .filter(([_, enabled]) => enabled)
         .map(([src, _]) => src);
 
     if (enabledDateSources.length > 0) {
-        // Temporal filter: building existed at the given year
-        const temporalFilter = [
-            'all',
-            ['<=', ['get', 'sd'], year],
-            ['any',
-                ['!', ['has', 'ed']],
-                ['==', ['get', 'ed'], null],
-                ['>=', ['get', 'ed'], year]
-            ]
-        ];
-
-        // Source filter for date sources (exclude 'ml' which is snapshot)
-        const dateSourceFilterExpr = ['in', ['get', 'src'], ['literal', enabledDateSources]];
-
-        // Combine: date source AND timeline filter
+        // Source filter using _src field
+        const dateSourceFilterExpr = ['in', '_src', ...enabledDateSources];
         conditions.push(['all', dateSourceFilterExpr, temporalFilter]);
     }
 
-    // === Type B: Snapshot Sources (static - ignores timeline) ===
+    // Type B: Snapshot Sources (static - ignores timeline)
     const enabledSnapshots = Object.entries(snapshotFilter)
         .filter(([_, enabled]) => enabled)
         .map(([src, _]) => src);
 
     if (enabledSnapshots.length > 0) {
-        // Snapshot buildings have src='ml' and ml_src specifies which snapshot
-        // Show ALL buildings from enabled snapshots (no timeline filter)
+        // Snapshot buildings have _src='ml' and ml_src specifies which snapshot
         const snapshotFilterExpr = [
             'all',
-            ['==', ['get', 'src'], 'ml'],
-            ['in', ['get', 'ml_src'], ['literal', enabledSnapshots]]
+            ['==', '_src', 'ml'],
+            ['in', 'ml_src', ...enabledSnapshots]
         ];
-
         conditions.push(snapshotFilterExpr);
     }
 
     // Combine Type A and Type B with OR
     if (conditions.length === 0) {
-        // No sources enabled - show nothing
-        return ['==', 1, 0]; // Always false
+        return ['==', '_src', '__none__']; // Always false
     } else if (conditions.length === 1) {
         return conditions[0];
     } else {
@@ -1235,20 +1258,10 @@ function updateLayerFilters(year) {
         }
     });
 
-    // Update Finn markers filter
+    // Finn markers disabled - FINN dates now merged into main buildings layer
+    // Keep layer hidden regardless of filter settings
     if (map.getLayer('finn-markers')) {
-        const finnFilter = [
-            'all',
-            ['<=', ['get', 'sd'], year],
-            ['any',
-                ['!', ['has', 'ed']],
-                ['>=', ['get', 'ed'], year]
-            ]
-        ];
-        map.setFilter('finn-markers', finnFilter);
-        // Update visibility based on source filter
-        const finnVisible = layerVisibility.buildings && dateSourceFilter.finn ? 'visible' : 'none';
-        map.setLayoutProperty('finn-markers', 'visibility', finnVisible);
+        map.setLayoutProperty('finn-markers', 'visibility', 'none');
     }
 
     // Update background color for historical styling
@@ -1789,7 +1802,10 @@ function initControls() {
         });
     }
 
-    // Initialize collapsible section handlers
+    // Initialize minimal layer toggle buttons
+    initLayerToggles();
+
+    // Initialize collapsible section handlers (legacy)
     initSectionToggles();
 
     // Initialize base map layer toggles
@@ -1802,6 +1818,94 @@ function initControls() {
     initRoadSourceControls();
 
     console.log('Controls initialized');
+}
+
+/**
+ * Initialize minimal layer toggle buttons
+ */
+function initLayerToggles() {
+    // Buildings toggle
+    const buildingsBtn = document.getElementById('toggleBuildings');
+    if (buildingsBtn) {
+        buildingsBtn.addEventListener('click', () => {
+            buildingsBtn.classList.toggle('active');
+            const visible = buildingsBtn.classList.contains('active');
+            toggleBuildingsLayer(visible);
+        });
+    }
+
+    // Roads toggle
+    const roadsBtn = document.getElementById('toggleRoads');
+    if (roadsBtn) {
+        roadsBtn.addEventListener('click', () => {
+            roadsBtn.classList.toggle('active');
+            const visible = roadsBtn.classList.contains('active');
+            toggleRoadsLayer(visible);
+        });
+    }
+
+    // Snapshots toggle (cycles through: off -> 1880 -> 1904 -> 1947 -> off)
+    const snapshotsBtn = document.getElementById('toggleSnapshots');
+    if (snapshotsBtn) {
+        const snapshots = ['off', 'kv1880', 'kv1904', 'air1947'];
+        let currentSnapshotIndex = 0;
+
+        snapshotsBtn.addEventListener('click', () => {
+            currentSnapshotIndex = (currentSnapshotIndex + 1) % snapshots.length;
+            const snapshot = snapshots[currentSnapshotIndex];
+
+            // Update button state and label
+            if (snapshot === 'off') {
+                snapshotsBtn.classList.remove('active');
+                snapshotsBtn.querySelector('.toggle-label').textContent = '1880';
+                // Disable all snapshot checkboxes
+                document.querySelectorAll('[data-snapshot-source]').forEach(cb => {
+                    cb.checked = false;
+                });
+            } else {
+                snapshotsBtn.classList.add('active');
+                const labels = { 'kv1880': '1880', 'kv1904': '1904', 'air1947': '1947' };
+                snapshotsBtn.querySelector('.toggle-label').textContent = labels[snapshot];
+                // Enable only this snapshot
+                document.querySelectorAll('[data-snapshot-source]').forEach(cb => {
+                    cb.checked = cb.dataset.snapshotSource === snapshot;
+                });
+            }
+
+            // Trigger map update
+            if (map && map.loaded()) {
+                updateMapYear(currentYear);
+            }
+        });
+    }
+}
+
+/**
+ * Toggle buildings layer visibility
+ */
+function toggleBuildingsLayer(visible) {
+    if (!map || !map.loaded()) return;
+    const visibility = visible ? 'visible' : 'none';
+    const buildingLayers = ['buildings', 'buildings-fill', 'buildings-outline', 'buildings-line'];
+    buildingLayers.forEach(layerId => {
+        if (map.getLayer(layerId)) {
+            map.setLayoutProperty(layerId, 'visibility', visibility);
+        }
+    });
+}
+
+/**
+ * Toggle roads layer visibility
+ */
+function toggleRoadsLayer(visible) {
+    if (!map || !map.loaded()) return;
+    const visibility = visible ? 'visible' : 'none';
+    const roadLayers = ['roads', 'roads-line', 'roads-outline'];
+    roadLayers.forEach(layerId => {
+        if (map.getLayer(layerId)) {
+            map.setLayoutProperty(layerId, 'visibility', visibility);
+        }
+    });
 }
 
 /**
@@ -1869,6 +1973,41 @@ async function loadBuildingsData() {
  * Type B: Historical Snapshots (static)
  */
 function initSourceFilterControls() {
+    // === Building Filter Button (debug mode) ===
+    const buildingFilterBtn = document.getElementById('buildingFilterBtn');
+    const sourceFilterPanel = document.getElementById('sourceFilterPanel');
+
+    if (buildingFilterBtn) {
+        buildingFilterBtn.addEventListener('click', () => {
+            sourceFilterEnabled = !sourceFilterEnabled;
+            buildingFilterBtn.classList.toggle('active', sourceFilterEnabled);
+            // Show/hide the source filter panel
+            if (sourceFilterPanel) {
+                sourceFilterPanel.style.display = sourceFilterEnabled ? 'block' : 'none';
+            }
+            // Update the map with new filter settings
+            updateMapYear(currentYear);
+            console.log('Building source filter:', sourceFilterEnabled ? 'ON (debug)' : 'OFF (production)');
+        });
+    }
+
+    // === Road Filter Button ===
+    const roadFilterBtn = document.getElementById('roadFilterBtn');
+    const roadSourceFilterPanel = document.getElementById('roadSourceFilterPanel');
+    let roadSourceFilterEnabled = false;
+
+    if (roadFilterBtn) {
+        roadFilterBtn.addEventListener('click', () => {
+            roadSourceFilterEnabled = !roadSourceFilterEnabled;
+            roadFilterBtn.classList.toggle('active', roadSourceFilterEnabled);
+            // Show/hide the road source filter panel
+            if (roadSourceFilterPanel) {
+                roadSourceFilterPanel.style.display = roadSourceFilterEnabled ? 'block' : 'none';
+            }
+            console.log('Road source filter:', roadSourceFilterEnabled ? 'ON' : 'OFF');
+        });
+    }
+
     // === Date Sources Panel (Type A) ===
     const dateFilterToggle = document.getElementById('dateSourceFilterToggle');
     const dateFilterContainer = document.querySelector('.date-sources-filter');
