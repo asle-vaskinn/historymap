@@ -193,6 +193,7 @@ class Normalizer(BaseNormalizer):
             # Determine if demolished
             status = str(props.get('sefrak_status', '1'))
             demolition_year = determine_demolition_date(start, end, status)
+            demolished = (status == '0')  # Status 0 = demolished/gone
 
             # Reproject geometry from UTM to WGS84
             if geom['type'] == 'Point':
@@ -237,6 +238,10 @@ class Normalizer(BaseNormalizer):
                     'bygningstype': props.get('bygningstype'),
                 }
             )
+
+            # Add demolished flag for status=0 buildings
+            if demolished:
+                feature['properties']['demolished'] = True
 
             features.append(feature)
 

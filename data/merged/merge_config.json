@@ -166,5 +166,12 @@
     "fallback_year": 1960,
     "manual_keeps_geometry": true,
     "notes": "OSM buildings are canonical geometry. Date sources attach to OSM. Buildings without dates shown only for years >= fallback_year."
+  },
+
+  "date_inference": {
+    "fallback_year": 1960,
+    "median_radius_m": 2000,
+    "exclude_sources": ["sefrak"],
+    "min_evidence_for_donation": ["h", "m"]
   }
 }

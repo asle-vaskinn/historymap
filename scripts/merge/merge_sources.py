@@ -15,6 +15,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+# Import constants
+from constants import (
+    DATE_FALLBACK,
+    NEAREST_K_DONORS,
+    determine_era,
+    check_evidence_meets_threshold
+)
+
 # Optional: Use shapely for spatial operations if available
 try:
     from shapely.geometry import shape, mapping
@@ -362,24 +370,26 @@ def merge_properties(
 
 def inherit_dates_from_neighbors(
     features: List[Dict],
-    median_radius_m: float = 2000.0,
-    exclude_sources: List[str] = None
+    nearest_k: int = NEAREST_K_DONORS,
+    exclude_sources: List[str] = None,
+    fallback_year: int = DATE_FALLBACK
 ) -> Tuple[List[Dict], Dict]:
     """
-    Inherit construction dates using multi-layer fallback strategy.
+    Inherit construction dates using median of nearest K donors.
 
-    Fallback chain:
-    1. MEDIAN of all donors within 2km radius (most robust)
-    2. NEAREST donor at any distance (for isolated buildings)
-    3. 1960 fallback (ultimate fallback, should be rare)
+    Strategy:
+    1. Find K nearest donors (with known dates)
+    2. Take MEDIAN of their dates (robust against outliers)
+    3. If no donors found, use fallback_year
 
     SEFRAK buildings are excluded as they represent heritage buildings
     with unusually old dates that would skew estimates.
 
     Args:
         features: List of building features
-        median_radius_m: Radius for median calculation (default: 2km)
+        nearest_k: Number of nearest neighbors to use for median (default: 3)
         exclude_sources: Sources to exclude from donors (default: ['sefrak'])
+        fallback_year: Year to use when no donors available (default: from DATE_FALLBACK constant)
 
     Returns:
         Tuple of (updated features, stats dict)
@@ -393,7 +403,7 @@ def inherit_dates_from_neighbors(
         print("Warning: shapely not available, skipping date inheritance")
         return features, {'skipped': True, 'reason': 'no_shapely'}
 
-    print(f"\n=== DATE INHERITANCE (median radius: {median_radius_m}m, exclude: {exclude_sources}) ===")
+    print(f"\n=== DATE INHERITANCE (nearest {nearest_k} median, exclude: {exclude_sources}) ===")
 
     # Separate donors from recipients
     # Donors: has sd, high/medium evidence, NOT from excluded sources
@@ -428,9 +438,9 @@ def inherit_dates_from_neighbors(
     print(f"  Recipients (no date): {len(recipients)}")
 
     if not donors:
-        print("  No donors available, using 1960 fallback for all")
+        print(f"  No donors available, using {fallback_year} fallback for all")
         for recipient in recipients:
-            recipient['properties']['sd'] = 1960
+            recipient['properties']['sd'] = fallback_year
             recipient['properties']['ev'] = 'l'
             recipient['properties']['sd_inherited'] = True
             recipient['properties']['sd_method'] = 'fallback'
@@ -438,23 +448,19 @@ def inherit_dates_from_neighbors(
             'donors': 0,
             'recipients': len(recipients),
             'median_count': 0,
-            'nearest_count': 0,
             'fallback_count': len(recipients)
         }
 
     # Build spatial index of donor centroids
     donor_tree = STRtree(donor_centroids)
 
-    # Convert radius from meters to approximate degrees
-    # At 63°N latitude: 1km ≈ 0.009° lat, 0.018° lon
-    # Use generous buffer for query, then filter by actual distance
-    buffer_deg = (median_radius_m / 1000.0) * 0.025
+    # Use generous buffer for spatial query (5km should cover most cases)
+    buffer_deg = 0.1  # ~10km at this latitude
 
     # Stats counters
     median_count = 0
-    nearest_count = 0
     fallback_count = 0
-    median_donor_counts = []
+    avg_distances = []
 
     for recipient in recipients:
         try:
@@ -462,7 +468,7 @@ def inherit_dates_from_neighbors(
             centroid = geom.centroid
         except Exception:
             # Can't process, use fallback
-            recipient['properties']['sd'] = 1960
+            recipient['properties']['sd'] = fallback_year
             recipient['properties']['ev'] = 'l'
             recipient['properties']['sd_inherited'] = True
             recipient['properties']['sd_method'] = 'fallback'
@@ -473,10 +479,8 @@ def inherit_dates_from_neighbors(
         query_box = centroid.buffer(buffer_deg)
         candidate_indices = donor_tree.query(query_box)
 
-        # Calculate actual distances and filter by radius
-        donors_within_radius = []
-        all_donors_with_dist = []
-
+        # Calculate distances to all candidates
+        donors_with_dist = []
         for idx in candidate_indices:
             donor_centroid = donor_centroids[idx]
             # Calculate approximate distance in meters
@@ -485,42 +489,31 @@ def inherit_dates_from_neighbors(
             dist_m = (dx**2 + dy**2) ** 0.5
 
             donor_date = donors[idx]['properties']['sd']
-            all_donors_with_dist.append((idx, dist_m, donor_date))
+            donors_with_dist.append((idx, dist_m, donor_date))
 
-            if dist_m <= median_radius_m:
-                donors_within_radius.append((idx, dist_m, donor_date))
+        if donors_with_dist:
+            # Sort by distance and take nearest K
+            donors_with_dist.sort(key=lambda x: x[1])
+            nearest_donors = donors_with_dist[:nearest_k]
 
-        # Apply fallback chain
-        if donors_within_radius:
-            # METHOD 1: Median of donors within radius
-            dates = [d[2] for d in donors_within_radius]
+            # Take median of nearest K dates
+            dates = [d[2] for d in nearest_donors]
             median_date = int(statistics.median(dates))
+            avg_dist = sum(d[1] for d in nearest_donors) / len(nearest_donors)
 
             recipient['properties']['sd'] = median_date
             recipient['properties']['ev'] = 'l'
             recipient['properties']['sd_inherited'] = True
             recipient['properties']['sd_method'] = 'median'
-            recipient['properties']['sd_donors'] = len(donors_within_radius)
+            recipient['properties']['sd_donors'] = len(nearest_donors)
+            recipient['properties']['sd_avg_dist'] = round(avg_dist, 0)
 
             median_count += 1
-            median_donor_counts.append(len(donors_within_radius))
-
-        elif all_donors_with_dist:
-            # METHOD 2: Nearest donor (any distance)
-            nearest = min(all_donors_with_dist, key=lambda x: x[1])
-            nearest_idx, nearest_dist, nearest_date = nearest
-
-            recipient['properties']['sd'] = nearest_date
-            recipient['properties']['ev'] = 'l'
-            recipient['properties']['sd_inherited'] = True
-            recipient['properties']['sd_method'] = 'nearest'
-            recipient['properties']['sd_dist'] = round(nearest_dist, 1)
-
-            nearest_count += 1
+            avg_distances.append(avg_dist)
 
         else:
-            # METHOD 3: 1960 fallback (no donors found at all)
-            recipient['properties']['sd'] = 1960
+            # No donors found at all (very rare)
+            recipient['properties']['sd'] = fallback_year
             recipient['properties']['ev'] = 'l'
             recipient['properties']['sd_inherited'] = True
             recipient['properties']['sd_method'] = 'fallback'
@@ -528,20 +521,18 @@ def inherit_dates_from_neighbors(
             fallback_count += 1
 
     # Calculate stats
-    avg_donors = sum(median_donor_counts) / len(median_donor_counts) if median_donor_counts else 0
+    overall_avg_dist = sum(avg_distances) / len(avg_distances) if avg_distances else 0
 
     print(f"  Method breakdown:")
-    print(f"    Median (within {median_radius_m}m): {median_count} (avg {avg_donors:.1f} donors)")
-    print(f"    Nearest (any distance): {nearest_count}")
-    print(f"    Fallback (1960): {fallback_count}")
+    print(f"    Median (nearest {nearest_k}): {median_count} (avg dist: {overall_avg_dist:.0f}m)")
+    print(f"    Fallback ({fallback_year}): {fallback_count}")
 
     stats = {
         'donors': len(donors),
         'recipients': len(recipients),
         'median_count': median_count,
-        'nearest_count': nearest_count,
         'fallback_count': fallback_count,
-        'avg_donors_per_median': round(avg_donors, 1)
+        'avg_donor_distance_m': round(overall_avg_dist, 0)
     }
 
     return features, stats
@@ -796,6 +787,44 @@ def parse_min_evidence_from_rule(rule: Dict) -> str:
         return 'l'
 
 
+def check_centroid_containment(geom1: Dict, geom2: Dict) -> bool:
+    """
+    Check if either building's centroid is contained within the other's footprint.
+
+    This catches cases where buildings are at the same location but have different
+    sizes (e.g., old small building replaced by large modern building).
+
+    Args:
+        geom1: First building geometry (GeoJSON)
+        geom2: Second building geometry (GeoJSON)
+
+    Returns:
+        True if centroid of geom1 is in geom2 OR centroid of geom2 is in geom1
+    """
+    if not HAS_SHAPELY:
+        return False
+
+    try:
+        shape1 = shape(geom1)
+        shape2 = shape(geom2)
+
+        if not shape1.is_valid or not shape2.is_valid:
+            return False
+
+        # Check if centroid of shape1 is in shape2
+        if shape2.contains(shape1.centroid):
+            return True
+
+        # Check if centroid of shape2 is in shape1
+        if shape1.contains(shape2.centroid):
+            return True
+
+        return False
+
+    except Exception:
+        return False
+
+
 def detect_replacements(
     features: List[Dict],
     config: Dict
@@ -803,14 +832,22 @@ def detect_replacements(
     """
     Detect building replacements and infer end dates.
 
-    For each historical building, check if a newer building overlaps.
+    For each historical building, check if a newer building overlaps or contains/is contained by centroid.
+    Matching criteria:
+    - Spatial overlap >= threshold, OR
+    - New building centroid inside old footprint, OR
+    - Old building centroid inside new footprint
+
     Uses era-based rules to determine if replacement should be marked:
     - pre_1900 (sd < 1900): requires high evidence (h)
     - 1900_1950 (1900 <= sd < 1950): requires medium evidence (m)
     - post_1950 (sd >= 1950): requires any evidence
 
     When a replacement is detected:
+    - Sets 'repl_by' on old building (ID of replacement)
+    - Sets 'repl_of' on new building (ID of replaced building)
     - If old building has no explicit end date (ed), infer it from new building's start date
+    - Sets 'ed_s' (end date source) to 'repl' when inferring from replacement
     - The inferred demolition year can be new_sd or new_sd - 1 (configurable via infer_demolition_offset)
     - Explicit end dates are never overridden
 
@@ -864,6 +901,17 @@ def detect_replacements(
             # Find all overlapping buildings using spatial index
             matches = find_matches(old_feat, [], threshold, spatial_index)
 
+            # Also check for centroid containment (may not meet overlap threshold)
+            # This catches cases where a small old building is replaced by a much larger new one
+            for new_feat in newer_buildings:
+                new_geom = new_feat.get('geometry')
+                old_geom = old_feat.get('geometry')
+
+                if new_geom and old_geom and check_centroid_containment(old_geom, new_geom):
+                    # Check if already in matches
+                    if not any(m[0] is new_feat for m in matches):
+                        matches.append((new_feat, 1.0))  # Score 1.0 for centroid containment
+
             for new_feat, overlap in matches:
                 new_sd = new_feat['properties'].get('sd')
 
@@ -876,12 +924,7 @@ def detect_replacements(
 
                 if use_era_rules:
                     # Determine era of old building
-                    if old_sd < 1900:
-                        era = 'pre_1900'
-                    elif old_sd < 1950:
-                        era = '1900_1950'
-                    else:
-                        era = 'post_1950'
+                    era = determine_era(old_sd)
 
                     # Find matching rule from the rules array
                     era_rule = next((r for r in era_rules if r.get('era') == era), None)
@@ -905,18 +948,23 @@ def detect_replacements(
 
                 if should_mark_replacement:
                     # Mark old building as replaced
-                    old_feat['properties']['rep_by'] = new_feat['properties'].get('_src_id')
+                    old_feat['properties']['repl_by'] = new_feat['properties'].get('_src_id')
                     old_feat['properties']['rep_ev'] = new_feat['properties'].get('ev', 'l')
+
+                    # Mark new building with what it replaced
+                    new_feat['properties']['repl_of'] = old_feat['properties'].get('_src_id')
 
                     # Infer demolition date only if not explicitly set
                     if old_feat['properties'].get('ed') is None:
                         if new_sd:
                             # Use new building's start date with optional offset
                             old_feat['properties']['ed'] = new_sd + demolition_offset
+                            old_feat['properties']['ed_s'] = 'repl'  # End date source is replacement
                             old_feat['properties']['ed_inferred'] = True
                         else:
                             # New building has no date, assume modern (1950)
                             old_feat['properties']['ed'] = 1950
+                            old_feat['properties']['ed_s'] = 'repl'
                             old_feat['properties']['ed_inferred'] = True
 
                     break  # Only one replacement per building
@@ -929,24 +977,20 @@ def detect_replacements(
                 if new_sd and new_sd <= old_sd:
                     continue
 
-                # Check overlap
-                overlap = calculate_overlap(
-                    old_feat.get('geometry'),
-                    new_feat.get('geometry')
-                )
+                # Check overlap or centroid containment
+                old_geom = old_feat.get('geometry')
+                new_geom = new_feat.get('geometry')
 
-                if overlap >= threshold:
+                overlap = calculate_overlap(old_geom, new_geom)
+                is_same_location = overlap >= threshold or check_centroid_containment(old_geom, new_geom)
+
+                if is_same_location:
                     # Determine if replacement should be marked
                     should_mark_replacement = False
 
                     if use_era_rules:
                         # Determine era of old building
-                        if old_sd < 1900:
-                            era = 'pre_1900'
-                        elif old_sd < 1950:
-                            era = '1900_1950'
-                        else:
-                            era = 'post_1950'
+                        era = determine_era(old_sd)
 
                         # Find matching rule from the rules array
                         era_rule = next((r for r in era_rules if r.get('era') == era), None)
@@ -970,18 +1014,23 @@ def detect_replacements(
 
                     if should_mark_replacement:
                         # Mark old building as replaced
-                        old_feat['properties']['rep_by'] = new_feat['properties'].get('_src_id')
+                        old_feat['properties']['repl_by'] = new_feat['properties'].get('_src_id')
                         old_feat['properties']['rep_ev'] = new_feat['properties'].get('ev', 'l')
+
+                        # Mark new building with what it replaced
+                        new_feat['properties']['repl_of'] = old_feat['properties'].get('_src_id')
 
                         # Infer demolition date only if not explicitly set
                         if old_feat['properties'].get('ed') is None:
                             if new_sd:
                                 # Use new building's start date with optional offset
                                 old_feat['properties']['ed'] = new_sd + demolition_offset
+                                old_feat['properties']['ed_s'] = 'repl'  # End date source is replacement
                                 old_feat['properties']['ed_inferred'] = True
                             else:
                                 # New building has no date, assume modern (1950)
                                 old_feat['properties']['ed'] = 1950
+                                old_feat['properties']['ed_s'] = 'repl'
                                 old_feat['properties']['ed_inferred'] = True
 
                         break  # Only one replacement per building
@@ -1251,13 +1300,15 @@ def merge_sources(config_path: Path, output_path: Optional[Path] = None) -> bool
         replacements = sum(1 for f in merged_features if 'ed' in f['properties'])
         print(f"Buildings with end dates (replaced/demolished): {replacements}")
 
-        # Inherit dates using multi-layer fallback (median within 2km, then nearest, then 1960)
+        # Inherit dates using median of nearest K donors
         inheritance_config = osm_centric_config.get('date_inheritance', {})
         if inheritance_config.get('enabled', True):
-            median_radius = inheritance_config.get('median_radius_m', 2000)
+            nearest_k = inheritance_config.get('nearest_k', 3)
+            fallback_year = osm_centric_config.get('fallback_year', DATE_FALLBACK)
             merged_features, inheritance_stats = inherit_dates_from_neighbors(
                 merged_features,
-                median_radius_m=median_radius
+                nearest_k=nearest_k,
+                fallback_year=fallback_year
             )
         else:
             inheritance_stats = {'skipped': True, 'reason': 'disabled'}

@@ -110,7 +110,12 @@ Properties:
   ed        : int|null  # end_date - Year demolished
   ed_t      : string    # end_date_type
   ed_c      : float     # end_date_confidence
-  ed_s      : string    # end_date_source
+  ed_s      : string    # end_date_source: 'sef'|'osm'|'ml80'|'mat'|'aer'|'repl'
+
+  # Demolition and replacement tracking
+  demolished : bool|null    # true = known to be demolished (from SEFRAK status=0)
+  repl_by    : string|null  # ID of the building that replaced this one
+  repl_of    : string|null  # ID of the building this one replaced
 
   # Building metadata (from OSM)
   name      : string
@@ -134,6 +139,66 @@ When a building changes significantly, we create a new record. The `pred` and `p
 **Visualization hint**:
 - Modified: "Built 1880 (extended 1920)" - continuous history
 - Replaced: "Built 1920" - new building, previous one is separate history
+
+### Building Replacement Detection
+
+The replacement detection system automatically identifies when demolished buildings have been replaced by new construction at the same location.
+
+#### Detection Logic
+
+**Spatial Matching**: A demolished building and a newer building are considered a replacement pair if:
+1. The demolished building's centroid falls within the newer building's polygon
+2. The demolished building has a known end date (`ed`)
+3. The newer building has a start date (`sd`) later than the demolished building's end date
+
+**Date Inheritance**: When a replacement is detected:
+- The old building's `ed` (end date) is set to the new building's `sd` (start date)
+- The `ed_s` (end date source) is set to `'repl'` to indicate the date was inherited
+- Evidence level is set to `'m'` (medium) for inferred demolition dates
+
+#### Replacement Fields
+
+| Field | Type | Direction | Description |
+|-------|------|-----------|-------------|
+| `demolished` | bool | Old building | Set to `true` if from SEFRAK with status=0 |
+| `repl_by` | string | Old building | ID of the building that replaced this one |
+| `repl_of` | string | New building | ID of the building this one replaced |
+
+#### Example: Replacement Pair
+
+```json
+// Demolished building (SEFRAK heritage building)
+{
+  "bid": "sef_12345",
+  "sd": 1850, "sd_t": "x", "sd_s": "sef",
+  "ed": 1965, "ed_t": "x", "ed_s": "repl",
+  "demolished": true,
+  "repl_by": "osm_way_789012",
+  "ev": "m"
+}
+
+// Replacement building (modern OSM building)
+{
+  "bid": "osm_way_789012",
+  "sd": 1965, "sd_t": "x", "sd_s": "mat",
+  "ed": null,
+  "repl_of": "sef_12345"
+}
+```
+
+#### End Date Source Values
+
+The `ed_s` field indicates where the end date came from:
+
+| Value | Description | Evidence Level |
+|-------|-------------|----------------|
+| `sef` | SEFRAK registry (status=0 = demolished) | High |
+| `osm` | OSM end_date tag | Medium |
+| `mat` | Matrikkelen (official registry) | High |
+| `repl` | Inherited from replacement building's start date | Medium |
+| `derived` | Inferred from other evidence | Low |
+
+When `ed_s = 'repl'`, the demolition date is not directly known but inferred from when the replacement was built.
 
 ## Source Priority & Conflict Resolution
 
