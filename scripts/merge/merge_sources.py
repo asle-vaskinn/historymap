@@ -218,7 +218,20 @@ def find_matches(
                     continue
 
                 try:
-                    # Calculate precise overlap
+                    # Handle point geometries (e.g., SEFRAK points matching OSM polygons)
+                    if cand_geom.geom_type == 'Point':
+                        # Point-in-polygon: if query polygon contains the point, it's a match
+                        if query_shape.contains(cand_geom):
+                            matches.append((candidate, 1.0))
+                        continue
+
+                    if query_shape.geom_type == 'Point':
+                        # Query is a point - check if contained in candidate polygon
+                        if cand_geom.contains(query_shape):
+                            matches.append((candidate, 1.0))
+                        continue
+
+                    # Calculate precise overlap for polygon-polygon
                     intersection = query_shape.intersection(cand_geom)
                     if intersection.is_empty:
                         continue
@@ -345,6 +358,416 @@ def merge_properties(
         merged['sd_src'] = base_src
 
     return merged
+
+
+def inherit_dates_from_neighbors(
+    features: List[Dict],
+    median_radius_m: float = 2000.0,
+    exclude_sources: List[str] = None
+) -> Tuple[List[Dict], Dict]:
+    """
+    Inherit construction dates using multi-layer fallback strategy.
+
+    Fallback chain:
+    1. MEDIAN of all donors within 2km radius (most robust)
+    2. NEAREST donor at any distance (for isolated buildings)
+    3. 1960 fallback (ultimate fallback, should be rare)
+
+    SEFRAK buildings are excluded as they represent heritage buildings
+    with unusually old dates that would skew estimates.
+
+    Args:
+        features: List of building features
+        median_radius_m: Radius for median calculation (default: 2km)
+        exclude_sources: Sources to exclude from donors (default: ['sef'])
+
+    Returns:
+        Tuple of (updated features, stats dict)
+    """
+    import statistics
+
+    if exclude_sources is None:
+        exclude_sources = ['sef']  # Exclude SEFRAK - heritage buildings are outliers
+
+    if not HAS_SHAPELY:
+        print("Warning: shapely not available, skipping date inheritance")
+        return features, {'skipped': True, 'reason': 'no_shapely'}
+
+    print(f"\n=== DATE INHERITANCE (median radius: {median_radius_m}m, exclude: {exclude_sources}) ===")
+
+    # Separate donors from recipients
+    # Donors: has sd, high/medium evidence, NOT from excluded sources
+    donors = []
+    recipients = []
+    donor_centroids = []
+
+    for f in features:
+        props = f.get('properties', {})
+        # Check sd_src (where the date came from), not _src (building geometry source)
+        date_src = props.get('sd_src', props.get('_src', ''))
+        ev = props.get('ev', '')
+
+        # Donor must: have evidence (h or m), have a date, NOT from excluded sources
+        if (ev in ('h', 'm') and
+            props.get('sd') is not None and
+            date_src not in exclude_sources):
+            donors.append(f)
+            # Get centroid for spatial indexing
+            try:
+                geom = shape(f['geometry'])
+                centroid = geom.centroid
+                donor_centroids.append(centroid)
+            except Exception:
+                # Skip invalid geometries
+                donors.pop()
+                continue
+        elif props.get('sd') is None:
+            recipients.append(f)
+
+    print(f"  Donors (excluding {exclude_sources}): {len(donors)}")
+    print(f"  Recipients (no date): {len(recipients)}")
+
+    if not donors:
+        print("  No donors available, using 1960 fallback for all")
+        for recipient in recipients:
+            recipient['properties']['sd'] = 1960
+            recipient['properties']['ev'] = 'l'
+            recipient['properties']['sd_inherited'] = True
+            recipient['properties']['sd_method'] = 'fallback'
+        return features, {
+            'donors': 0,
+            'recipients': len(recipients),
+            'median_count': 0,
+            'nearest_count': 0,
+            'fallback_count': len(recipients)
+        }
+
+    # Build spatial index of donor centroids
+    donor_tree = STRtree(donor_centroids)
+
+    # Convert radius from meters to approximate degrees
+    # At 63°N latitude: 1km ≈ 0.009° lat, 0.018° lon
+    # Use generous buffer for query, then filter by actual distance
+    buffer_deg = (median_radius_m / 1000.0) * 0.025
+
+    # Stats counters
+    median_count = 0
+    nearest_count = 0
+    fallback_count = 0
+    median_donor_counts = []
+
+    for recipient in recipients:
+        try:
+            geom = shape(recipient['geometry'])
+            centroid = geom.centroid
+        except Exception:
+            # Can't process, use fallback
+            recipient['properties']['sd'] = 1960
+            recipient['properties']['ev'] = 'l'
+            recipient['properties']['sd_inherited'] = True
+            recipient['properties']['sd_method'] = 'fallback'
+            fallback_count += 1
+            continue
+
+        # Query nearby donors using bounding box
+        query_box = centroid.buffer(buffer_deg)
+        candidate_indices = donor_tree.query(query_box)
+
+        # Calculate actual distances and filter by radius
+        donors_within_radius = []
+        all_donors_with_dist = []
+
+        for idx in candidate_indices:
+            donor_centroid = donor_centroids[idx]
+            # Calculate approximate distance in meters
+            dx = (centroid.x - donor_centroid.x) * 111000 * 0.45  # cos(63°) ≈ 0.45
+            dy = (centroid.y - donor_centroid.y) * 111000
+            dist_m = (dx**2 + dy**2) ** 0.5
+
+            donor_date = donors[idx]['properties']['sd']
+            all_donors_with_dist.append((idx, dist_m, donor_date))
+
+            if dist_m <= median_radius_m:
+                donors_within_radius.append((idx, dist_m, donor_date))
+
+        # Apply fallback chain
+        if donors_within_radius:
+            # METHOD 1: Median of donors within radius
+            dates = [d[2] for d in donors_within_radius]
+            median_date = int(statistics.median(dates))
+
+            recipient['properties']['sd'] = median_date
+            recipient['properties']['ev'] = 'l'
+            recipient['properties']['sd_inherited'] = True
+            recipient['properties']['sd_method'] = 'median'
+            recipient['properties']['sd_donors'] = len(donors_within_radius)
+
+            median_count += 1
+            median_donor_counts.append(len(donors_within_radius))
+
+        elif all_donors_with_dist:
+            # METHOD 2: Nearest donor (any distance)
+            nearest = min(all_donors_with_dist, key=lambda x: x[1])
+            nearest_idx, nearest_dist, nearest_date = nearest
+
+            recipient['properties']['sd'] = nearest_date
+            recipient['properties']['ev'] = 'l'
+            recipient['properties']['sd_inherited'] = True
+            recipient['properties']['sd_method'] = 'nearest'
+            recipient['properties']['sd_dist'] = round(nearest_dist, 1)
+
+            nearest_count += 1
+
+        else:
+            # METHOD 3: 1960 fallback (no donors found at all)
+            recipient['properties']['sd'] = 1960
+            recipient['properties']['ev'] = 'l'
+            recipient['properties']['sd_inherited'] = True
+            recipient['properties']['sd_method'] = 'fallback'
+
+            fallback_count += 1
+
+    # Calculate stats
+    avg_donors = sum(median_donor_counts) / len(median_donor_counts) if median_donor_counts else 0
+
+    print(f"  Method breakdown:")
+    print(f"    Median (within {median_radius_m}m): {median_count} (avg {avg_donors:.1f} donors)")
+    print(f"    Nearest (any distance): {nearest_count}")
+    print(f"    Fallback (1960): {fallback_count}")
+
+    stats = {
+        'donors': len(donors),
+        'recipients': len(recipients),
+        'median_count': median_count,
+        'nearest_count': nearest_count,
+        'fallback_count': fallback_count,
+        'avg_donors_per_median': round(avg_donors, 1)
+    }
+
+    return features, stats
+
+
+def merge_osm_centric(
+    config: Dict,
+    base_dir: Path
+) -> Tuple[List[Dict], List[Dict], Dict]:
+    """
+    OSM-centric merge: Use OSM buildings as base, attach dates from other sources.
+
+    Args:
+        config: Merge configuration
+        base_dir: Base directory for resolving paths
+
+    Returns:
+        Tuple of (merged_features, unmatched_features, stats)
+    """
+    osm_centric_config = config.get('osm_centric', {})
+    sources_config = config['sources']
+
+    # Load OSM buildings as base
+    osm_config = sources_config.get('osm', {})
+    if not osm_config.get('enabled', False):
+        print("  ERROR: OSM source must be enabled for OSM-centric merge")
+        return [], [], {}
+
+    osm_features = load_source(osm_config, base_dir)
+    if not osm_features:
+        print("  ERROR: Could not load OSM buildings")
+        return [], [], {}
+
+    print(f"  OSM base: {len(osm_features)} buildings")
+
+    # Tag OSM features with source config
+    for f in osm_features:
+        f['_source_config'] = osm_config
+        f['_matched'] = False  # Will be set True if dates attached
+
+    # Load date sources
+    date_source_names = osm_centric_config.get('date_sources', ['manual', 'finn', 'sefrak'])
+    date_features = []
+    date_source_configs = {}
+
+    for source_name in date_source_names:
+        source_config = sources_config.get(source_name, {})
+        if not source_config.get('enabled', False):
+            print(f"  {source_name}: DISABLED")
+            continue
+
+        features = load_source(source_config, base_dir)
+        if features is None:
+            print(f"  {source_name}: NOT FOUND")
+            continue
+
+        print(f"  {source_name}: {len(features)} features (date_priority {source_config.get('date_priority', 999)})")
+
+        # Tag features
+        for f in features:
+            f['_source_config'] = source_config
+            f['_source_name'] = source_name
+            f['_matched'] = False
+
+        date_features.extend(features)
+        date_source_configs[source_name] = source_config
+
+    # Build indices for matching
+    print("\nBuilding indices for matching...")
+
+    # Build osm_ref index from date sources for fast lookup
+    osm_ref_to_date_features = {}
+    for f in date_features:
+        osm_ref = f.get('properties', {}).get('osm_ref')
+        if osm_ref:
+            if osm_ref not in osm_ref_to_date_features:
+                osm_ref_to_date_features[osm_ref] = []
+            osm_ref_to_date_features[osm_ref].append(f)
+    print(f"  osm_ref index: {len(osm_ref_to_date_features)} entries")
+
+    # Build spatial index for date features
+    date_spatial_index = None
+    if HAS_SHAPELY and len(date_features) > 50:
+        date_spatial_index = build_spatial_index(date_features)
+        if date_spatial_index:
+            print(f"  Spatial index: {len(date_spatial_index[1])} date features indexed")
+
+    # Process each OSM building
+    print("\nAttaching dates to OSM buildings...")
+    threshold = config['matching'].get('overlap_threshold', 0.5)
+
+    osm_ref_matches = 0
+    spatial_matches = 0
+    multi_source_buildings = 0
+
+    for osm_feat in osm_features:
+        osm_props = osm_feat['properties']
+        osm_id = osm_props.get('_src_id', '')
+
+        # Find matching date sources
+        matched_date_features = []
+
+        # 1. Check osm_ref index (exact match)
+        if osm_id in osm_ref_to_date_features:
+            for date_feat in osm_ref_to_date_features[osm_id]:
+                if not date_feat.get('_matched'):
+                    matched_date_features.append((date_feat, 1.0))
+                    date_feat['_matched'] = True
+                    osm_ref_matches += 1
+
+        # 2. Spatial matching for remaining
+        if date_spatial_index:
+            spatial_matches_found = find_matches(osm_feat, [], threshold, date_spatial_index)
+            for date_feat, score in spatial_matches_found:
+                if not date_feat.get('_matched'):
+                    matched_date_features.append((date_feat, score))
+                    date_feat['_matched'] = True
+                    spatial_matches += 1
+
+        # Merge matched dates into OSM feature
+        if matched_date_features:
+            osm_feat['_matched'] = True
+            if len(matched_date_features) > 1:
+                multi_source_buildings += 1
+
+            # Sort by date_priority (lowest = highest priority)
+            matched_date_features.sort(
+                key=lambda x: x[0].get('_source_config', {}).get('date_priority', 999)
+            )
+
+            # Merge properties from all matched sources
+            for date_feat, score in matched_date_features:
+                date_config = date_feat.get('_source_config', {})
+                osm_feat['properties'] = merge_properties(
+                    osm_feat['properties'],
+                    date_feat['properties'],
+                    base_config=osm_config,
+                    new_config=date_config
+                )
+
+    print(f"  osm_ref matches: {osm_ref_matches}")
+    print(f"  spatial matches: {spatial_matches}")
+    print(f"  multi-source buildings: {multi_source_buildings}")
+
+    # Collect unmatched historical buildings
+    unmatched_features = []
+    manual_kept = 0
+
+    manual_keeps_geometry = osm_centric_config.get('manual_keeps_geometry', True)
+
+    for date_feat in date_features:
+        if date_feat.get('_matched'):
+            continue
+
+        source_name = date_feat.get('_source_name', '')
+
+        # Exception: MANUAL buildings stay in main output with their own geometry
+        if source_name == 'manual' and manual_keeps_geometry:
+            # Clean up internal fields
+            props = dict(date_feat['properties'])
+            if '_source_config' in props:
+                del props['_source_config']
+            if '_source_name' in props:
+                del props['_source_name']
+            if '_matched' in props:
+                del props['_matched']
+
+            osm_features.append({
+                'type': 'Feature',
+                'properties': props,
+                'geometry': date_feat['geometry']
+            })
+            manual_kept += 1
+        else:
+            # Goes to unmatched file
+            props = dict(date_feat['properties'])
+            props['_unmatched_reason'] = 'no_osm_geometry'
+            unmatched_features.append({
+                'type': 'Feature',
+                'properties': props,
+                'geometry': date_feat['geometry']
+            })
+
+    unmatched_sefrak = sum(1 for f in unmatched_features if f['properties'].get('_src') == 'sefrak')
+    unmatched_finn = sum(1 for f in unmatched_features if f['properties'].get('_src') == 'finn')
+
+    print(f"\nUnmatched historical buildings: {len(unmatched_features)}")
+    print(f"  SEFRAK: {unmatched_sefrak}")
+    print(f"  FINN: {unmatched_finn}")
+    print(f"  MANUAL kept in main layer: {manual_kept}")
+
+    # Clean up merged features
+    merged_features = []
+    for osm_feat in osm_features:
+        props = dict(osm_feat['properties'])
+
+        # Clean up internal fields
+        if '_source_config' in props:
+            del props['_source_config']
+        if '_matched' in props:
+            del props['_matched']
+        if '_source_name' in props:
+            del props['_source_name']
+
+        # Set geometry source
+        if 'geom_src' not in props:
+            props['geom_src'] = 'osm'
+
+        merged_features.append({
+            'type': 'Feature',
+            'properties': props,
+            'geometry': osm_feat['geometry']
+        })
+
+    stats = {
+        'osm_base': len(osm_features),
+        'osm_ref_matches': osm_ref_matches,
+        'spatial_matches': spatial_matches,
+        'multi_source': multi_source_buildings,
+        'unmatched_total': len(unmatched_features),
+        'unmatched_sefrak': unmatched_sefrak,
+        'unmatched_finn': unmatched_finn,
+        'manual_kept': manual_kept
+    }
+
+    return merged_features, unmatched_features, stats
 
 
 def parse_min_evidence_from_rule(rule: Dict) -> str:
@@ -805,6 +1228,109 @@ def merge_sources(config_path: Path, output_path: Optional[Path] = None) -> bool
     print("Loading merge configuration...")
     config = load_config(config_path)
     base_dir = config_path.parent
+
+    # Check if OSM-centric merge is enabled
+    osm_centric_config = config.get('osm_centric', {})
+    if osm_centric_config.get('enabled', False):
+        print("\n=== OSM-CENTRIC MERGE MODE ===")
+        print("Using OSM buildings as base, attaching dates from other sources\n")
+
+        print("Loading sources:")
+        merged_features, unmatched_features, osm_stats = merge_osm_centric(config, base_dir)
+
+        if not merged_features:
+            print("\nNo features merged!")
+            return False
+
+        print(f"\nFeatures after OSM-centric merge: {len(merged_features)}")
+
+        # Detect replacements (still useful for finding demolished buildings)
+        print("\nDetecting building replacements...")
+        merged_features = detect_replacements(merged_features, config)
+
+        replacements = sum(1 for f in merged_features if 'ed' in f['properties'])
+        print(f"Buildings with end dates (replaced/demolished): {replacements}")
+
+        # Inherit dates using multi-layer fallback (median within 2km, then nearest, then 1960)
+        inheritance_config = osm_centric_config.get('date_inheritance', {})
+        if inheritance_config.get('enabled', True):
+            median_radius = inheritance_config.get('median_radius_m', 2000)
+            merged_features, inheritance_stats = inherit_dates_from_neighbors(
+                merged_features,
+                median_radius_m=median_radius
+            )
+        else:
+            inheritance_stats = {'skipped': True, 'reason': 'disabled'}
+
+        # Generate main output
+        output = {
+            'type': 'FeatureCollection',
+            'features': merged_features
+        }
+
+        if output_path is None:
+            output_file = config['output'].get('output_file', 'buildings_merged.geojson')
+            output_path = base_dir / output_file
+
+        print(f"\nWriting merged output to {output_path}...")
+        with open(output_path, 'w') as f:
+            json.dump(output, f)
+
+        # Generate unmatched output
+        if unmatched_features:
+            unmatched_file = config['output'].get('unmatched_output_file', 'buildings_unmatched.geojson')
+            unmatched_path = base_dir / unmatched_file
+            unmatched_output = {
+                'type': 'FeatureCollection',
+                'features': unmatched_features
+            }
+            print(f"Writing unmatched buildings to {unmatched_path}...")
+            with open(unmatched_path, 'w') as f:
+                json.dump(unmatched_output, f)
+
+        # Generate reports
+        source_stats = {
+            'osm': osm_stats.get('osm_base', 0),
+            'matched_from_date_sources': osm_stats.get('osm_ref_matches', 0) + osm_stats.get('spatial_matches', 0),
+            'unmatched': osm_stats.get('unmatched_total', 0)
+        }
+
+        report = {
+            'merged_at': datetime.utcnow().isoformat(),
+            'config_file': str(config_path),
+            'merge_mode': 'osm_centric',
+            'source_stats': source_stats,
+            'osm_centric_stats': osm_stats,
+            'total_output': len(merged_features),
+            'buildings_with_dates': sum(1 for f in merged_features if 'sd' in f['properties']),
+            'buildings_replaced': replacements,
+            'unmatched_count': len(unmatched_features)
+        }
+
+        report_path = output_path.with_suffix('.report.json')
+        print(f"Writing report to {report_path}...")
+        with open(report_path, 'w') as f:
+            json.dump(report, f, indent=2)
+
+        # Generate quality report
+        print("\nGenerating data quality report...")
+        quality_report = generate_quality_report(merged_features, config)
+        quality_path = output_path.with_suffix('.quality.json')
+        with open(quality_path, 'w') as f:
+            json.dump(quality_report, f, indent=2)
+
+        print_quality_summary(quality_report)
+
+        print(f"\nOSM-centric merge complete!")
+        print(f"  Output: {output_path}")
+        print(f"  Unmatched: {base_dir / config['output'].get('unmatched_output_file', 'buildings_unmatched.geojson')}")
+        print(f"  Report: {report_path}")
+        print(f"  Quality Report: {quality_path}")
+
+        return True
+
+    # === Legacy merge mode (non OSM-centric) ===
+    print("\n=== LEGACY MERGE MODE ===")
 
     # Load enabled sources in priority order
     sources_config = config['sources']

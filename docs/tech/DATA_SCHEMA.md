@@ -19,6 +19,70 @@ We have multiple data sources providing partial temporal information about build
 | Matrikkelen | Official build year | High (official) |
 | Aerial photos | Building existed in year Z | High (visual) |
 
+## OSM-Centric Data Model
+
+Modern OSM buildings serve as the **canonical geometry layer**. Date information from other sources is **attached to** OSM buildings rather than creating separate features.
+
+### Data Flow
+
+```
+OSM Buildings (polygons)     ──────────────────┐
+                                               ▼
+SEFRAK (points) ─── match osm_ref/spatial ───► ATTACH dates to OSM
+FINN (points)   ─── match osm_ref/spatial ───► ATTACH dates to OSM
+MANUAL (polys)  ─── match osm_ref/spatial ───► ATTACH dates to OSM
+                                               │
+                                               ▼
+                              ┌────────────────┴────────────────┐
+                              │                                 │
+                    MATCHED → buildings_merged.geojson    UNMATCHED → buildings_unmatched.geojson
+                    (OSM geometry + best dates)            (historical buildings, no OSM match)
+```
+
+### Key Principles
+
+1. **OSM geometry is authoritative** - All matched buildings use OSM polygon geometry
+2. **Dates attach to buildings** - Multiple sources can contribute dates to one building
+3. **Priority resolves conflicts** - When sources disagree, use date_priority order
+4. **Unmatched = potentially demolished** - Historical buildings not in OSM go to separate file
+
+### Fallback Rule
+
+Buildings without any date information are assumed to be modern:
+- **Fallback year: 1960**
+- Buildings with no `sd` field are shown only when `year >= 1960`
+- This prevents undated buildings from appearing in historical views
+
+### Date Inheritance (Multi-Layer Fallback)
+
+Buildings without dates inherit using a three-tier fallback strategy:
+
+| Priority | Method | Radius | Description |
+|----------|--------|--------|-------------|
+| 1 | **Median** | 2km | Median of all donors within radius (most robust) |
+| 2 | **Nearest** | unlimited | Nearest donor at any distance |
+| 3 | **1960** | - | Ultimate fallback (should be rare) |
+
+**Parameters:**
+- **Median radius:** 2000m (2km)
+- **Exclude sources:** SEFRAK (heritage buildings are unusually old outliers)
+- **Donor requirements:** Must have `ev: 'h'` or `ev: 'm'` and a valid `sd` date
+- **Result evidence:** Inherited dates are marked `ev: 'l'` (low evidence)
+
+**Additional fields for inherited dates:**
+```
+sd_inherited  : bool       # true = date inherited from neighbor
+sd_method     : string     # 'median' | 'nearest' | 'fallback'
+sd_donors     : int        # number of donors used (for median method)
+sd_dist       : float      # distance in meters to donor (for nearest method)
+```
+
+**Rationale:** Buildings in dense areas get the median of nearby dates (more robust than single-point estimate). Isolated buildings fall back to nearest donor. The 1960 fallback is only used when no donors exist at all.
+
+### MANUAL Exception
+
+Researcher-verified MANUAL buildings without OSM match are kept in the main layer with their own geometry (not sent to unmatched file).
+
 ## Date Types
 
 Each temporal bound can be one of:
@@ -51,7 +115,25 @@ Properties:
   # Building metadata (from OSM)
   name      : string
   btype     : string    # building type
+
+  # Building lineage (for tracking modifications/replacements)
+  pred      : string|null   # predecessor bid (previous building at this location)
+  pred_rel  : string|null   # relationship: 'mod' (modified) | 'rep' (replaced)
 ```
+
+### Building Lineage
+
+When a building changes significantly, we create a new record. The `pred` and `pred_rel` fields track the relationship:
+
+| pred_rel | Meaning | Example |
+|----------|---------|---------|
+| `mod` | **Modified** - Same building, changed geometry | Building extended, wing added |
+| `rep` | **Replaced** - Different building, predecessor demolished | Old house torn down, apartment built |
+| `null` | No predecessor or unknown | Original building, or no historical data |
+
+**Visualization hint**:
+- Modified: "Built 1880 (extended 1920)" - continuous history
+- Replaced: "Built 1920" - new building, previous one is separate history
 
 ## Source Priority & Conflict Resolution
 
@@ -197,6 +279,45 @@ buildings_consolidated:
 }
 ```
 
+### Modified building (extended in 1920):
+```json
+// Original building (1880-1920, small footprint)
+{
+  "bid": "osm_111_v1",
+  "sd": 1880, "sd_t": "x", "sd_s": "sef",
+  "ed": 1920, "ed_t": "x", "ed_s": "manual",
+  "pred": null
+}
+
+// Same building after extension (1920-present, larger footprint)
+{
+  "bid": "osm_111",
+  "sd": 1920, "sd_t": "x", "sd_s": "manual",
+  "ed": null,
+  "pred": "osm_111_v1",
+  "pred_rel": "mod"
+}
+```
+
+### Replaced building (demolished, new construction):
+```json
+// Old house (demolished 1960)
+{
+  "bid": "hist_old_house",
+  "sd": 1850, "sd_t": "x", "sd_s": "sef",
+  "ed": 1960, "ed_t": "x", "ed_s": "manual"
+}
+
+// New apartment building (different building)
+{
+  "bid": "osm_222",
+  "sd": 1962, "sd_t": "x", "sd_s": "mat",
+  "ed": null,
+  "pred": "hist_old_house",
+  "pred_rel": "rep"
+}
+```
+
 ## Visualization Rules
 
 When displaying buildings for year Y:
@@ -227,6 +348,21 @@ FINN property listings are matched to existing buildings via:
 2. **Fallback: Spatial matching** - Centroid within 10m AND 50% polygon overlap
 
 When matched, FINN provides the construction date (`sd`) which may override SEFRAK dates per the priority rules above.
+
+## Generated Buildings
+
+Schema for procedurally generated buildings from historical maps:
+
+```
+gen       : bool         # true = procedurally generated geometry (not detected/known)
+gen_src   : string       # source map used for generation: "kv1880", "kv1904"
+gen_zone  : string       # zone ID for grouping (e.g., "zone_001")
+gen_conf  : float        # generation confidence based on zone detection quality
+```
+
+**Usage**: When historical maps show "buildings exist here" but don't provide accurate footprints, we procedurally generate plausible building polygons using era-appropriate constraints (6-12m wide for 1800s wooden buildings).
+
+**Visualization**: Generated buildings should be styled differently (hatching, transparency) to indicate estimated geometry.
 
 ## Building Clusters (Future)
 

@@ -1,42 +1,57 @@
-# Current Work: Nearest-Neighbor Date Inheritance
+# Current Work: Multi-Layer Date Inheritance
 
-## Status: APPROVED
-## Approved: 2025-12-20
+## Status: IMPLEMENTED
+## Approved: 2025-12-22
+## Implemented: 2025-12-22
 
 ## Summary
 
-Add a fallback mechanism where buildings without construction dates inherit the date from the nearest building that has a high-evidence construction year (within 1km). This provides better temporal estimates than the blanket "1960 fallback" by using spatial proximity as a proxy for construction era.
+Enhance the date inheritance algorithm with a three-tier fallback strategy. Instead of just copying the nearest building's date within 1km, we use:
+1. **Median** of all donors within 2km (most robust)
+2. **Nearest** donor at any distance (for isolated buildings)
+3. **1960 fallback** (ultimate fallback, should be rare)
+
+SEFRAK buildings are excluded from the donor pool as they represent heritage buildings with unusually old dates that would skew estimates.
+
+## Fallback Chain
+
+| Priority | Method | Radius | Min Donors | Rationale |
+|----------|--------|--------|------------|-----------|
+| 1 | **Median** | 2km | 1 | Uses local neighborhood pattern |
+| 2 | **Nearest** | unlimited | 1 | Fallback for isolated buildings |
+| 3 | **1960** | - | 0 | Ultimate fallback |
 
 ## Parameters
 
 | Parameter | Value | Rationale |
 |-----------|-------|-----------|
-| Max distance | 1000m (1km) | Buildings within 1km likely same era |
-| Donor evidence | High only (`ev: 'h'`) | Only trust reliable dates |
+| Median radius | 2000m (2km) | Captures neighborhood pattern |
+| Donor sources | Exclude SEFRAK (`src != 'sef'`) | Heritage buildings are outliers |
+| Donor evidence | High or Medium (`ev: 'h'` or `ev: 'm'`) | FINN has medium evidence |
 | Result evidence | Low (`ev: 'l'`) | Inherited = uncertain |
-| Frontend | Normal slider behavior | Inherited dates work like regular dates |
+| Distance weighting | None | Keep simple, equal treatment |
 
 ## Schema Additions
 
 ```
 sd_inherited : bool      # true = date inherited from neighbor
-sd_from      : string    # _src_id of donor building
-sd_dist      : float     # distance in meters to donor
+sd_method    : string    # 'median' | 'nearest' | 'fallback'
+sd_donors    : int       # number of donors used (for median)
+sd_dist      : float     # distance in meters (for nearest)
 ```
 
 ## Tasks
 
-### 1. Implement date inheritance in merge pipeline
-- [ ] Add `inherit_dates_from_neighbors()` function to `merge_sources.py`
-- [ ] Collect donor pool: buildings with `ev: 'h'` and `sd`
-- [ ] Build spatial index of donors using shapely STRtree
-- [ ] For each undated building, find nearest donor within 1km
-- [ ] Copy `sd`, set `ev: 'l'`, add metadata fields
+### 1. Update inherit_dates_from_neighbors() function
+- [x] Filter donor pool: exclude SEFRAK (`src != 'sef'`)
+- [x] Implement median calculation for donors within 2km
+- [x] Fall back to nearest (any distance) if no donors in 2km
+- [x] Fall back to 1960 if no donors at all
+- [x] Add `sd_method` field to track which method was used
 
-### 2. Integrate into merge workflow
-- [ ] Call after OSM-centric merge, before output
-- [ ] Log statistics (donors, recipients, avg distance)
-- [ ] Handle edge cases (no donors nearby)
+### 2. Update merge workflow
+- [x] Log statistics per method (median count, nearest count, fallback count)
+- [x] Log median donor counts (avg donors per building)
 
 ### 3. Regenerate output
 - [ ] Run merge pipeline
@@ -44,50 +59,81 @@ sd_dist      : float     # distance in meters to donor
 - [ ] Verify in frontend
 
 ### 4. Update documentation
-- [ ] Update DATA_SCHEMA.md with new fields
+- [x] Update DATA_SCHEMA.md with `sd_method` field
 
 ## Algorithm
 
 ```python
-def inherit_dates_from_neighbors(features, max_distance_m=1000):
-    # 1. Separate donors (high evidence + has sd) from recipients (no sd)
-    donors = [f for f in features if f['properties'].get('ev') == 'h'
-              and f['properties'].get('sd')]
+def inherit_dates_from_neighbors(features, median_radius_m=2000):
+    # 1. Separate donors from recipients
+    # Donors: has sd, high/medium evidence, NOT SEFRAK
+    donors = [f for f in features
+              if f['properties'].get('sd')
+              and f['properties'].get('ev') in ('h', 'm')
+              and f['properties'].get('src') != 'sef']
+
     recipients = [f for f in features if not f['properties'].get('sd')]
 
     # 2. Build spatial index of donor centroids
     donor_index = build_spatial_index(donors)
 
-    # 3. For each recipient, find nearest donor
+    # 3. For each recipient, apply fallback chain
     for recipient in recipients:
         centroid = get_centroid(recipient)
-        nearest_donor, distance = find_nearest(centroid, donor_index)
 
-        if distance <= max_distance_m:
-            recipient['properties']['sd'] = nearest_donor['properties']['sd']
+        # Try median within 2km
+        nearby_donors = find_all_within(centroid, donor_index, median_radius_m)
+
+        if nearby_donors:
+            dates = [d['properties']['sd'] for d in nearby_donors]
+            median_date = statistics.median(dates)
+            recipient['properties']['sd'] = int(median_date)
             recipient['properties']['ev'] = 'l'
             recipient['properties']['sd_inherited'] = True
-            recipient['properties']['sd_from'] = nearest_donor['properties']['_src_id']
-            recipient['properties']['sd_dist'] = round(distance, 1)
+            recipient['properties']['sd_method'] = 'median'
+            recipient['properties']['sd_donors'] = len(nearby_donors)
+        else:
+            # Fall back to nearest (any distance)
+            nearest_donor, distance = find_nearest(centroid, donor_index)
+
+            if nearest_donor:
+                recipient['properties']['sd'] = nearest_donor['properties']['sd']
+                recipient['properties']['ev'] = 'l'
+                recipient['properties']['sd_inherited'] = True
+                recipient['properties']['sd_method'] = 'nearest'
+                recipient['properties']['sd_dist'] = round(distance, 1)
+            else:
+                # Ultimate fallback
+                recipient['properties']['sd'] = 1960
+                recipient['properties']['ev'] = 'l'
+                recipient['properties']['sd_inherited'] = True
+                recipient['properties']['sd_method'] = 'fallback'
 
     return features
 ```
 
 ## Expected Impact
 
-- Donor pool: ~1,400 high-evidence buildings (SEFRAK, FINN with `ev: 'h'`)
+- Donor pool: ~1,200 buildings (FINN with dates, excluding SEFRAK)
 - Recipients: ~65,000 undated OSM buildings
-- Result: Many buildings get era-appropriate dates instead of 1960 fallback
+- Most buildings get median-based dates from neighborhood
+- Isolated buildings get nearest-based dates
+- Very few should need 1960 fallback
 
 ## Success Criteria
 
-- Buildings near historical city center get 1800s dates
-- Buildings in newer suburbs still get 1960 fallback (no donors nearby)
+- Buildings in dense areas use median (more robust)
+- Buildings in sparse areas use nearest
 - Year slider shows gradual city growth pattern
+- Minimal 1960 fallbacks
 
 ---
 
 ## Archive
+
+### Nearest-Neighbor Date Inheritance v1 (2025-12-20) - SUPERSEDED
+
+Simple 1km radius, nearest neighbor copy. Replaced by multi-layer approach.
 
 ### Procedural Building Generation Phase 1 (2025-12-20) - IMPLEMENTED
 
