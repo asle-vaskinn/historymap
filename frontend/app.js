@@ -1854,6 +1854,40 @@ function stopAnimation() {
 }
 
 /**
+ * Step year forward or backward by delta
+ * @param {number} delta - Number of years to step (+1 or -1)
+ */
+function stepYear(delta) {
+    // Stop animation if running
+    if (isAnimating) {
+        stopAnimation();
+    }
+
+    // Calculate new year with bounds checking
+    const newYear = Math.max(CONFIG.minYear, Math.min(CONFIG.maxYear, currentYear + delta));
+
+    // Update if changed
+    if (newYear !== currentYear) {
+        currentYear = newYear;
+
+        // Update slider
+        const slider = document.getElementById('yearSlider');
+        if (slider) {
+            slider.value = currentYear;
+        }
+
+        // Update year display
+        const yearDisplay = document.getElementById('currentYear');
+        if (yearDisplay) {
+            yearDisplay.textContent = currentYear;
+        }
+
+        // Update map
+        updateMapYear(currentYear);
+    }
+}
+
+/**
  * Update the era indicator with current year info
  * @param {number} year - Current year
  */
@@ -1947,17 +1981,13 @@ function initControls() {
     // Step back button
     const stepBackBtn = document.getElementById('stepBackBtn');
     if (stepBackBtn) {
-        stepBackBtn.addEventListener('click', () => {
-            stepYear(-1);
-        });
+        stepBackBtn.addEventListener('click', () => stepYear(-1));
     }
 
     // Step forward button
     const stepFwdBtn = document.getElementById('stepFwdBtn');
     if (stepFwdBtn) {
-        stepFwdBtn.addEventListener('click', () => {
-            stepYear(1);
-        });
+        stepFwdBtn.addEventListener('click', () => stepYear(1));
     }
 
     // Initialize minimal layer toggle buttons
@@ -2165,8 +2195,8 @@ async function saveManualEdit(osmId, geometry, newSd, newEd) {
             editPopup = null;
         }
 
-        // TODO: Add to overlay layer (will implement next)
-        alert('Building data saved successfully! Refresh the page to see changes.');
+        // Add to overlay layer for immediate visibility
+        addToManualEditsOverlay(result);
 
     } catch (error) {
         console.error('Failed to save manual edit:', error);

@@ -15,21 +15,21 @@ const SOURCES = {
             layers: 'amt1',
             attribution: '© Kartverket'
         },
-        buildings: 'data/sources/ml_detected/kartverket_1904/normalized/buildings.geojson',
-        roads: 'data/sources/ml_detected/kartverket_1880/roads/roads.geojson'  // ML-extracted roads
+        buildings: 'data/sources/sefrak/normalized/buildings.geojson',  // 1894 SEFRAK buildings
+        roads: 'data/sources/ml_detected/kartverket_1880/roads/roads.geojson'  // 215 ML-extracted roads
     },
     gen1880: {
         name: 'Generated 1880 (PoC)',
         year: 1880,
-        bounds: [10.39, 63.42, 10.41, 63.44],
+        bounds: [10.35, 63.38, 10.45, 63.46],  // Match road extraction bounds
         raster: {
             type: 'wms',
             url: 'https://wms.geonorge.no/skwms1/wms.historiskekart',
             layers: 'amt1',
             attribution: '© Kartverket'
         },
-        buildings: 'data/sources/generated/kv1880/buildings_test.geojson',
-        roads: 'data/sources/ml_detected/kartverket_1880/roads/roads.geojson',  // ML-extracted roads
+        buildings: 'data/sources/generated/kv1880/buildings_test.geojson',  // 52 test buildings
+        roads: 'data/sources/ml_detected/kartverket_1880/roads/roads.geojson',  // 215 ML-extracted roads
         generatedMode: true  // Use special styling for generated buildings
     },
     ortofoto1937: {
@@ -184,18 +184,26 @@ async function loadSource(sourceId) {
     currentSource = sourceId;
     const source = SOURCES[sourceId];
 
+    console.log('Loading source:', sourceId, source);
+
     if (!source) {
         console.error('Source not found:', sourceId);
         return;
     }
 
     document.getElementById('stats').textContent = 'Loading...';
+    document.getElementById('annotationCount').textContent = '0 annotated';  // Reset annotation count
 
     // Load buildings GeoJSON (if available)
     if (source.buildings) {
         try {
+            console.log('Fetching buildings from:', source.buildings);
             const response = await fetch(source.buildings);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
             buildingsData = await response.json();
+            console.log('Buildings loaded:', buildingsData.features?.length || 0, 'features');
 
             const count = buildingsData.features?.length || 0;
 
@@ -226,10 +234,14 @@ async function loadSource(sourceId) {
     // Load roads GeoJSON (if available)
     if (source.roads) {
         try {
+            console.log('Fetching roads from:', source.roads);
             const response = await fetch(source.roads);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
             roadsData = await response.json();
             const roadCount = roadsData.features?.length || 0;
-            console.log(`Loaded ${roadCount} road segments`);
+            console.log('Roads loaded:', roadCount, 'segments');
 
             // Update stats to include roads
             const buildingCount = buildingsData?.features?.length || 0;
@@ -462,28 +474,40 @@ function applyAnnotationsToFeatures() {
 }
 
 function addRasterLayers(source) {
-    if (!source.raster) return;
+    if (!source.raster) {
+        console.log('No raster config for source');
+        return;
+    }
 
     if (source.raster.type === 'wms') {
         // WMS tile source - georeferenced historical maps from Kartverket
         const bounds = source.bounds;  // [west, south, east, north]
-        map.addSource('raster-0', {
-            type: 'raster',
-            tiles: [
-                `${source.raster.url}?service=WMS&version=1.3.0&request=GetMap` +
-                `&layers=${source.raster.layers}&styles=&format=image/png` +
-                `&crs=EPSG:3857&width=512&height=512&bbox={bbox-epsg-3857}`
-            ],
-            tileSize: 512,
-            bounds: bounds,
-            attribution: source.raster.attribution
-        });
-        map.addLayer({
-            id: 'raster-0',
-            type: 'raster',
-            source: 'raster-0',
-            paint: { 'raster-opacity': 1 }
-        });
+        const wmsUrl = `${source.raster.url}?service=WMS&version=1.3.0&request=GetMap` +
+            `&layers=${source.raster.layers}&styles=&format=image/png` +
+            `&crs=EPSG:3857&width=512&height=512&bbox={bbox-epsg-3857}`;
+
+        console.log('Adding WMS source:', source.raster.layers);
+        console.log('WMS URL template:', wmsUrl);
+        console.log('Bounds:', bounds);
+
+        try {
+            map.addSource('raster-0', {
+                type: 'raster',
+                tiles: [wmsUrl],
+                tileSize: 512,
+                bounds: bounds,
+                attribution: source.raster.attribution
+            });
+            map.addLayer({
+                id: 'raster-0',
+                type: 'raster',
+                source: 'raster-0',
+                paint: { 'raster-opacity': 1 }
+            });
+            console.log('WMS layer added successfully');
+        } catch (err) {
+            console.error('Failed to add WMS layer:', err);
+        }
     } else if (source.raster.type === 'mosaic') {
         // Multiple image tiles
         source.raster.images.forEach((img, i) => {

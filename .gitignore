@@ -1,10 +1,74 @@
+# Python
 *.pyc
 __pycache__/
+.venv/
+venv/
 
-# Large data files (download with scripts)
+# OS
+.DS_Store
+
+# Large data files (download/generate with scripts)
 data/planetiler.jar
 data/trondheim.osm.pbf
-data/trondheim.pmtiles
 data/data/
 *.zip
 *.jar
+
+# Generated GeoJSON files
+data/*.geojson
+data/*.pmtiles
+data/*.db
+data/*.meta.json
+
+# Source data (downloaded/extracted)
+data/sources/
+data/sefrak/
+data/kartverket/1880/
+data/kartverket/gcps/
+data/kartverket/raw/
+data/kartverket/tiles/
+data/kartverket/*.geojson
+data/kartverket/*.png
+!data/kartverket/test_hist.png
+
+# Merged output
+data/merged/*.geojson
+data/merged/*.json
+!data/merged/merge_config.json
+!data/merged/roads_merge_config.json
+
+# Export output
+data/export/
+data/extracted/
+
+# Training data
+data/synthetic/
+data/training_*/
+data/annotations/
+data/georeference/
+
+# External data sources
+data/trondheim_byarkiv/
+data/trondheim_wms/
+
+# Database files
+data/db/
+
+# Frontend generated data
+frontend/data/
+
+# ML models and results
+models/
+results/
+
+# Temporary/working files
+data/cleanup.sh
+data/CLEANUP_RECOMMENDATIONS.md
+data/sources_manifest.json
+PMTILES_IMPLEMENTATION.md
+SOURCE_FILTER_FIX.md
+docs/matrikkelen_application.md
+
+# Editor files
+scripts/*.html
+!scripts/test_frontend.js

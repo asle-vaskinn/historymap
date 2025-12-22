@@ -1,0 +1,19 @@
+{
+  "version": "1.0",
+  "feature_type": "road",
+  "description": "Road merge from OSM baseline",
+  "sources": {
+    "osm_roads": {
+      "enabled": true,
+      "path": "../sources/osm_roads/normalized/roads.geojson",
+      "priority": 100
+    }
+  },
+  "matching": {
+    "method": "centerline_buffer",
+    "buffer_m": 10,
+    "angle_tolerance_deg": 15,
+    "min_overlap_ratio": 0.6
+  },
+  "output": "../merged/roads_merged.geojson"
+}
