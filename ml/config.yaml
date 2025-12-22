@@ -134,3 +134,28 @@ class_names:
   2: road
   3: water
   4: forest
+
+# Vectorization configuration (post-inference)
+vectorize:
+  # Output buildings and roads to separate directories
+  separate_classes: true
+
+  # Which classes to vectorize (by name or ID)
+  classes_to_export:
+    - building
+    - road
+
+  # Output directory structure per class
+  output_dirs:
+    building: buildings/    # Polygons
+    road: roads/           # LineStrings (skeletonized)
+
+  # Minimum area/length to keep (removes noise)
+  min_area_m2: 10         # For buildings
+  min_length_m: 5         # For roads
+
+  # Road-specific: skeletonize before vectorizing
+  road_skeletonize: true
+
+  # Simplification tolerance (Douglas-Peucker)
+  simplify_tolerance: 1.0  # meters

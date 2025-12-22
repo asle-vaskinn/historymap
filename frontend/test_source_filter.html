@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Source Filter Test - Trondheim Historical Map</title>
+
+    <!-- MapLibre GL JS -->
+    <script src="https://unpkg.com/maplibre-gl@4.0.0/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@4.0.0/dist/maplibre-gl.css" rel="stylesheet" />
+
+    <!-- PMTiles Protocol -->
+    <script src="https://unpkg.com/pmtiles@3.0.6/dist/pmtiles.js"></script>
+
+    <link rel="stylesheet" href="style.css">
+
+    <style>
+        .test-panel {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            max-width: 400px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .test-panel h4 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .test-status {
+            margin: 5px 0;
+            padding: 5px;
+            background: #f0f0f0;
+            border-radius: 3px;
+        }
+        .test-status.pass {
+            background: #d4edda;
+            color: #155724;
+        }
+        .test-status.fail {
+            background: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <!-- Controls from main index.html -->
+    <div class="controls-container">
+        <div class="controls-header">
+            <h1>Source Filter Test</h1>
+            <div class="year-display">
+                <span class="year-label">Year:</span>
+                <span class="year-value" id="currentYear">2020</span>
+            </div>
+        </div>
+
+        <!-- Source Filter -->
+        <div class="source-filter">
+            <div class="source-filter-header" id="sourceFilterToggle">
+                <h3>Filter by Source</h3>
+                <span class="collapse-icon">▼</span>
+            </div>
+            <div class="source-filter-content" id="sourceFilterContent">
+                <div class="source-filter-actions">
+                    <button id="selectAllSources" class="source-action-btn">All</button>
+                    <button id="clearAllSources" class="source-action-btn">None</button>
+                </div>
+
+                <div class="source-group">
+                    <div class="source-group-title">Registry Sources</div>
+                    <label class="source-checkbox">
+                        <input type="checkbox" id="src-sef" checked data-source="sef">
+                        <span class="source-color" style="background-color: #8b6914;"></span>
+                        <span class="source-label">SEFRAK</span>
+                        <span class="source-count" id="count-sef">-</span>
+                    </label>
+                    <label class="source-checkbox">
+                        <input type="checkbox" id="src-tk" checked data-source="tk">
+                        <span class="source-color" style="background-color: #2e7d32;"></span>
+                        <span class="source-label">Trondheim Kommune</span>
+                        <span class="source-count" id="count-tk">-</span>
+                    </label>
+                    <label class="source-checkbox">
+                        <input type="checkbox" id="src-mat" checked data-source="mat">
+                        <span class="source-color" style="background-color: #1565c0;"></span>
+                        <span class="source-label">Matrikkelen</span>
+                        <span class="source-count" id="count-mat">-</span>
+                    </label>
+                </div>
+
+                <div class="source-group">
+                    <div class="source-group-title">AI-Detected</div>
+                    <label class="source-checkbox">
+                        <input type="checkbox" id="src-ml" checked data-source="ml">
+                        <span class="source-color" style="background-color: #8b4513;"></span>
+                        <span class="source-label">ML Detection</span>
+                        <span class="source-count" id="count-ml">-</span>
+                    </label>
+                </div>
+
+                <div class="source-group">
+                    <div class="source-group-title">Modern</div>
+                    <label class="source-checkbox">
+                        <input type="checkbox" id="src-osm" checked data-source="osm">
+                        <span class="source-color" style="background-color: #d4a373;"></span>
+                        <span class="source-label">OpenStreetMap</span>
+                        <span class="source-count" id="count-osm">-</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Test Status Panel -->
+    <div class="test-panel" id="testPanel">
+        <h4>Test Results</h4>
+        <div id="testResults">
+            <div class="test-status">Waiting for initialization...</div>
+        </div>
+    </div>
+
+    <!-- Loading indicator -->
+    <div id="loading" class="loading">
+        <div class="spinner"></div>
+        <p>Loading map...</p>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        // Test script to verify source counting and filtering
+        function runTests() {
+            const results = document.getElementById('testResults');
+            results.innerHTML = '';
+
+            function addResult(test, pass, message) {
+                const div = document.createElement('div');
+                div.className = `test-status ${pass ? 'pass' : 'fail'}`;
+                div.textContent = `${pass ? '✓' : '✗'} ${test}: ${message}`;
+                results.appendChild(div);
+            }
+
+            // Test 1: Check if data cache is populated
+            setTimeout(() => {
+                const cachePopulated = buildingsDataCache !== null;
+                addResult('Data Cache', cachePopulated,
+                    cachePopulated ?
+                    `Loaded ${buildingsDataCache.features.length} buildings` :
+                    'Cache not populated');
+
+                // Test 2: Check if counts are displayed
+                const countSef = document.getElementById('count-sef').textContent;
+                const countOsm = document.getElementById('count-osm').textContent;
+                const countMl = document.getElementById('count-ml').textContent;
+
+                const countsDisplayed = countOsm !== '-' || countMl !== '-' || countSef !== '-';
+                addResult('Source Counts', countsDisplayed,
+                    `OSM: ${countOsm}, ML: ${countMl}, SEF: ${countSef}`);
+
+                // Test 3: Verify OSM has the most buildings
+                const osmCount = parseInt(countOsm.replace(',', ''));
+                const osmIsMost = !isNaN(osmCount) && osmCount > 1000;
+                addResult('OSM Count Sanity', osmIsMost,
+                    osmIsMost ? `${osmCount} buildings (expected)` : `${countOsm} (unexpected)`);
+
+                // Test 4: Check if source filter checkboxes work
+                const checkbox = document.getElementById('src-osm');
+                if (checkbox) {
+                    addResult('Checkbox Controls', true, 'All checkboxes present');
+                } else {
+                    addResult('Checkbox Controls', false, 'Checkboxes missing');
+                }
+
+                // Test 5: Verify map is loaded
+                const mapLoaded = map !== null && map.isStyleLoaded();
+                addResult('Map Loaded', mapLoaded,
+                    mapLoaded ? 'Map initialized and style loaded' : 'Map not ready');
+
+                // Instructions for manual testing
+                const instructions = document.createElement('div');
+                instructions.style.marginTop = '15px';
+                instructions.style.padding = '10px';
+                instructions.style.background = '#fff3cd';
+                instructions.style.borderRadius = '3px';
+                instructions.innerHTML = `
+                    <strong>Manual Tests:</strong><br>
+                    1. Uncheck "OpenStreetMap" - most buildings should disappear<br>
+                    2. Uncheck "ML Detection" - ML buildings should disappear<br>
+                    3. Click "None" - all buildings should disappear<br>
+                    4. Click "All" - all buildings should reappear<br>
+                    5. Check console for filter debug logs
+                `;
+                results.appendChild(instructions);
+            }, 3000); // Wait 3 seconds for data to load
+        }
+
+        // Run tests after page loads
+        window.addEventListener('load', () => {
+            setTimeout(runTests, 1000);
+        });
+    </script>
+</body>
+</html>

@@ -68,6 +68,7 @@ body {
     font-variant-numeric: tabular-nums;
 }
 
+.step-btn,
 .play-btn {
     width: 28px;
     height: 28px;
@@ -83,8 +84,18 @@ body {
     transition: all 0.2s ease;
 }
 
+.step-btn {
+    font-size: 10px;
+}
+
+.step-btn:hover,
 .play-btn:hover {
     background: rgba(255, 255, 255, 0.35);
+}
+
+.step-btn:active {
+    background: rgba(255, 255, 255, 0.5);
+    transform: scale(0.95);
 }
 
 .play-btn.playing {
@@ -1351,6 +1362,68 @@ body {
     transition: all 0.3s ease;
 }
 
+/* ===== Rebuild Button and Status ===== */
+.rebuild-btn {
+    padding: 10px 16px;
+    background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(243, 156, 18, 0.3);
+    transition: all 0.2s ease;
+    margin: 10px 0;
+    width: 100%;
+}
+
+.rebuild-btn:hover {
+    background: linear-gradient(135deg, #e67e22 0%, #d35400 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(230, 126, 34, 0.4);
+}
+
+.rebuild-btn:active {
+    transform: translateY(0);
+}
+
+.rebuild-status {
+    display: none;
+    padding: 10px;
+    margin: 10px 0;
+    background: #f0f2ff;
+    border: 1px solid #667eea;
+    border-radius: 6px;
+    color: #667eea;
+    font-size: 13px;
+    font-weight: 500;
+    text-align: center;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+/* Road change type indicator styles */
+.maplibregl-popup-content .change-type-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-left: 4px;
+}
+
+.maplibregl-popup-content .change-type-same { color: #888888; }
+.maplibregl-popup-content .change-type-widened { color: #4a90d9; }
+.maplibregl-popup-content .change-type-rerouted { color: #d97706; }
+.maplibregl-popup-content .change-type-replaced { color: #7c3aed; }
+.maplibregl-popup-content .change-type-removed { color: #dc2626; }
+.maplibregl-popup-content .change-type-new { color: #16a34a; }
+
 /* ===== Source Inspection Mode ===== */
 
 /* Mini inspection button */
@@ -1672,4 +1745,157 @@ body:has(.inspection-overlay.active) .inspection-selector {
         left: 10px;
         width: auto;
     }
+}
+
+/* ===== Edit Popup ===== */
+.edit-popup {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    padding: 0;
+}
+
+.edit-popup h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #2c3e50;
+    margin: 0 0 12px 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.edit-popup .current-values {
+    background: #f8f9fa;
+    padding: 10px;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    font-size: 12px;
+}
+
+.edit-popup .current-values div {
+    margin: 4px 0;
+    color: #495057;
+}
+
+.edit-popup .current-values strong {
+    color: #2c3e50;
+    font-weight: 600;
+}
+
+.edit-popup .edit-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.edit-popup label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    color: #495057;
+    font-weight: 500;
+}
+
+.edit-popup input[type="number"] {
+    padding: 8px 10px;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    font-size: 13px;
+    width: 100%;
+    background: #ffffff;
+}
+
+.edit-popup input[type="number"]:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+}
+
+.edit-popup .edit-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.edit-popup .save-btn,
+.edit-popup .cancel-btn {
+    flex: 1;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.edit-popup .save-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.edit-popup .save-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.edit-popup .cancel-btn {
+    background: #f8f9fa;
+    color: #495057;
+    border: 1px solid #dee2e6;
+}
+
+.edit-popup .cancel-btn:hover {
+    background: #e9ecef;
+}
+
+/* ===== Debug Legend ===== */
+.debug-legend {
+    position: fixed;
+    bottom: 40px;
+    left: 20px;
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    z-index: 100;
+    font-size: 12px;
+    min-width: 140px;
+}
+
+.debug-legend-title {
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.debug-legend-section {
+    margin-bottom: 8px;
+}
+
+.debug-legend-section:last-child {
+    margin-bottom: 0;
+}
+
+.debug-legend-subtitle {
+    font-size: 10px;
+    color: #6c757d;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+
+.debug-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 0;
+    color: #495057;
+}
+
+.legend-color {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
 }

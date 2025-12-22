@@ -1,156 +1,151 @@
-# Current Work: Multi-Layer Date Inheritance
+# Current Work: Building Replacement Detection + Architecture Cleanup
 
-## Status: IMPLEMENTED
-## Approved: 2025-12-22
-## Implemented: 2025-12-22
+## Status: APPROVED
+## Date: 2025-12-22
 
 ## Summary
 
-Enhance the date inheritance algorithm with a three-tier fallback strategy. Instead of just copying the nearest building's date within 1km, we use:
-1. **Median** of all donors within 2km (most robust)
-2. **Nearest** donor at any distance (for isolated buildings)
-3. **1960 fallback** (ultimate fallback, should be rare)
+Implement building replacement detection to identify demolished buildings and inherit demolition dates from their replacements. Most historical demolitions in Trondheim were replacements - old building demolished, new building constructed on same site. Also includes architecture cleanup to consolidate scattered magic numbers and make code actually read from config.
 
-SEFRAK buildings are excluded from the donor pool as they represent heritage buildings with unusually old dates that would skew estimates.
+## Key Insight
 
-## Fallback Chain
+```
+Building A (1880 map) overlaps Building B (modern OSM)
+Building B's sd = 1950 (from SEFRAK or estimation)
+→ Building A's ed = 1950 (inherited from replacement)
+```
 
-| Priority | Method | Radius | Min Donors | Rationale |
-|----------|--------|--------|------------|-----------|
-| 1 | **Median** | 2km | 1 | Uses local neighborhood pattern |
-| 2 | **Nearest** | unlimited | 1 | Fallback for isolated buildings |
-| 3 | **1960** | - | 0 | Ultimate fallback |
+SEFRAK provides 289 buildings with `status=0` (demolished) but NO demolition dates. These dates must be inherited from replacement buildings.
 
-## Parameters
+## Decisions
 
-| Parameter | Value | Rationale |
-|-----------|-------|-----------|
-| Median radius | 2000m (2km) | Captures neighborhood pattern |
-| Donor sources | Exclude SEFRAK (`src != 'sef'`) | Heritage buildings are outliers |
-| Donor evidence | High or Medium (`ev: 'h'` or `ev: 'm'`) | FINN has medium evidence |
-| Result evidence | Low (`ev: 'l'`) | Inherited = uncertain |
-| Distance weighting | None | Keep simple, equal treatment |
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Matching method | Centroid containment | Handles rebuilt larger/smaller/shifted |
+| SEFRAK demolished | Flag only, dates from replacements | SEFRAK has no demolition dates |
+| Date inheritance | `old.ed = new.sd` | Replacement's construction = demolition |
+| Architecture | Constants file + read config | Fix 5+ hardcoded `1960` values |
 
 ## Schema Additions
 
-```
-sd_inherited : bool      # true = date inherited from neighbor
-sd_method    : string    # 'median' | 'nearest' | 'fallback'
-sd_donors    : int       # number of donors used (for median)
-sd_dist      : float     # distance in meters (for nearest)
+```python
+# Existing fields (already in DATA_SCHEMA.md)
+ed          # End date (demolition year)
+ed_t        # 'x' exact, 's' estimated
+ed_s        # 'sef' (SEFRAK), 'repl' (from replacement), 'map' (ML)
+
+# New fields
+demolished  # boolean - known to be demolished (from SEFRAK status=0)
+repl_by     # ID of building that replaced this one
+repl_of     # ID of building this replaced
 ```
 
 ## Tasks
 
-### 1. Update inherit_dates_from_neighbors() function
-- [x] Filter donor pool: exclude SEFRAK (`src != 'sef'`)
-- [x] Implement median calculation for donors within 2km
-- [x] Fall back to nearest (any distance) if no donors in 2km
-- [x] Fall back to 1960 if no donors at all
-- [x] Add `sd_method` field to track which method was used
+### Phase 1: Architecture Cleanup
 
-### 2. Update merge workflow
-- [x] Log statistics per method (median count, nearest count, fallback count)
-- [x] Log median donor counts (avg donors per building)
+- [ ] Create `scripts/constants.py` with centralized magic numbers:
+  - DATE_FALLBACK = 1960
+  - MEDIAN_RADIUS_M = 2000
+  - ML_CONFIDENCE_HIGH = 0.9
+  - ML_CONFIDENCE_MEDIUM = 0.7
+  - ERA_BOUNDS = [1900, 1950]
+- [ ] Update `merge_sources.py` to read `fallback_year` from config (currently ignored)
+- [ ] Extract `determine_era(year)` function (duplicated at lines 879-884, 944-949)
+- [ ] Extract `check_evidence_threshold(ev, min_ev)` function
+- [ ] Create `scripts/normalize/date_utils.py` for shared date parsing
 
-### 3. Regenerate output
-- [ ] Run merge pipeline
-- [ ] Regenerate PMTiles
-- [ ] Verify in frontend
+### Phase 2: SEFRAK Demolished Integration
 
-### 4. Update documentation
-- [x] Update DATA_SCHEMA.md with `sd_method` field
+- [ ] Update `normalize_sefrak.py` to set `demolished=true` for status=0
+- [ ] Ensure SEFRAK demolished buildings flow through merge pipeline
+- [ ] Add SEFRAK demolished to candidate list for date inheritance
 
-## Algorithm
+### Phase 3: Replacement Detection Enhancement
 
-```python
-def inherit_dates_from_neighbors(features, median_radius_m=2000):
-    # 1. Separate donors from recipients
-    # Donors: has sd, high/medium evidence, NOT SEFRAK
-    donors = [f for f in features
-              if f['properties'].get('sd')
-              and f['properties'].get('ev') in ('h', 'm')
-              and f['properties'].get('src') != 'sef']
+- [ ] Implement centroid-containment matching:
+  - New building centroid inside old footprint → same location
+  - OR old building centroid inside new footprint → same location
+  - Overlap ratio >30% confirms replacement vs adjacent
+- [ ] Inherit `ed` from replacement's `sd` for demolished buildings
+- [ ] Track replacement chain: `repl_by`, `repl_of` fields
+- [ ] Update quality report with replacement statistics
 
-    recipients = [f for f in features if not f['properties'].get('sd')]
+## Date Inference Rules
 
-    # 2. Build spatial index of donor centroids
-    donor_index = build_spatial_index(donors)
+| Scenario | Old Building `ed` | Evidence |
+|----------|-------------------|----------|
+| SEFRAK has demolition date | SEFRAK date | `h` (high) |
+| Overlaps modern building with known `sd` | Modern building's `sd` | `m` (medium) |
+| Overlaps modern building, `sd` estimated | Modern building's estimated `sd` | `l` (low) |
+| No overlap (truly removed, rare) | Map where last seen + buffer | `l` (low) |
 
-    # 3. For each recipient, apply fallback chain
-    for recipient in recipients:
-        centroid = get_centroid(recipient)
+## Files to Modify
 
-        # Try median within 2km
-        nearby_donors = find_all_within(centroid, donor_index, median_radius_m)
+| File | Changes |
+|------|---------|
+| `scripts/constants.py` | NEW - centralized magic numbers |
+| `scripts/normalize/date_utils.py` | NEW - shared date parsing |
+| `scripts/normalize/normalize_sefrak.py` | Add demolished flag |
+| `scripts/merge/merge_sources.py` | Read config, extract functions, centroid matching |
+| `scripts/merge/merge_config.json` | Add date_inference section |
+| `docs/tech/DATA_SCHEMA.md` | Document new fields |
 
-        if nearby_donors:
-            dates = [d['properties']['sd'] for d in nearby_donors]
-            median_date = statistics.median(dates)
-            recipient['properties']['sd'] = int(median_date)
-            recipient['properties']['ev'] = 'l'
-            recipient['properties']['sd_inherited'] = True
-            recipient['properties']['sd_method'] = 'median'
-            recipient['properties']['sd_donors'] = len(nearby_donors)
-        else:
-            # Fall back to nearest (any distance)
-            nearest_donor, distance = find_nearest(centroid, donor_index)
+## Architecture Issues to Fix
 
-            if nearest_donor:
-                recipient['properties']['sd'] = nearest_donor['properties']['sd']
-                recipient['properties']['ev'] = 'l'
-                recipient['properties']['sd_inherited'] = True
-                recipient['properties']['sd_method'] = 'nearest'
-                recipient['properties']['sd_dist'] = round(distance, 1)
-            else:
-                # Ultimate fallback
-                recipient['properties']['sd'] = 1960
-                recipient['properties']['ev'] = 'l'
-                recipient['properties']['sd_inherited'] = True
-                recipient['properties']['sd_method'] = 'fallback'
+| Issue | File:Line | Fix |
+|-------|-----------|-----|
+| `1960` hardcoded 5+ times | merge_sources.py:431,465,523 | Use constants.DATE_FALLBACK |
+| Config `fallback_year` ignored | merge_sources.py | Read from osm_centric config |
+| Duplicate era logic | merge_sources.py:879-884,944-949 | Extract to function |
+| ML thresholds hardcoded | normalize_ml.py:76-78 | Use constants |
+| Date parsing duplicated | normalize_*.py | Use date_utils.py |
 
-    return features
-```
+## Expected Yield
 
-## Expected Impact
-
-- Donor pool: ~1,200 buildings (FINN with dates, excluding SEFRAK)
-- Recipients: ~65,000 undated OSM buildings
-- Most buildings get median-based dates from neighborhood
-- Isolated buildings get nearest-based dates
-- Very few should need 1960 fallback
+| Source | Demolished Buildings | With Dates |
+|--------|---------------------|------------|
+| SEFRAK status=0 | 289 | 0 → ~200 (via replacement) |
+| ML 1880 absent in modern | ~100-500 | ~80% (via replacement) |
+| **Total** | **~400-800** | **~300-600** |
 
 ## Success Criteria
 
-- Buildings in dense areas use median (more robust)
-- Buildings in sparse areas use nearest
-- Year slider shows gradual city growth pattern
-- Minimal 1960 fallbacks
+- [ ] `scripts/constants.py` exists with all magic numbers
+- [ ] `merge_sources.py` reads `fallback_year` from config
+- [ ] No duplicate era determination logic
+- [ ] SEFRAK demolished buildings have `demolished=true`
+- [ ] Replacement detection finds overlapping buildings
+- [ ] Demolished buildings inherit `ed` from replacements
+- [ ] `repl_by`/`repl_of` fields track replacement chains
+- [ ] Quality report shows replacement statistics
 
 ---
 
 ## Archive
 
-### Nearest-Neighbor Date Inheritance v1 (2025-12-20) - SUPERSEDED
+### Year Step Buttons (2025-12-22) - APPROVED (pending)
 
-Simple 1km radius, nearest neighbor copy. Replaced by multi-layer approach.
+Add forward/back step buttons (◀ ▶) next to the play button to allow single-year navigation.
 
-### Procedural Building Generation Phase 1 (2025-12-20) - IMPLEMENTED
+### Road Temporal Network (2025-12-22) - IMPLEMENTED
 
-Proof-of-concept procedural building generation from historical map zones.
+Segment-based road tracking with LSS-Hausdorff matching and building-based date inference.
+See `scripts/extract/extract_roads.py`, `scripts/merge/match_roads.py`, `scripts/merge/infer_road_dates.py`.
 
-**Completed:**
-- `scripts/generate/subdivide_parcels.py` - Parcel subdivision algorithm
-- `scripts/generate/generate_buildings.py` - Building footprint generation
-- `data/sources/generated/zones/test_zone.geojson` - Test zone definitions
-- `data/sources/generated/zones/test_streets.geojson` - Test street network
-- `data/sources/generated/kv1880/buildings_test.geojson` - Generated output (52 buildings)
-- Source viewer integration with amber/dashed styling for generated buildings
+### UI Reorganization + Manual Edit Mode (2025-12-22) - IMPLEMENTED
 
-**Pending (Phase 2):**
-- Automated zone segmentation from historical map colors
-- Full coverage of Amtskart 1880
+Reorganized toggle buttons to Background/Debug/Edit. Added Edit mode for manually setting building construction/demolition dates.
+
+### Semi-Manual FINN Data Entry (2025-12-22) - IMPLEMENTED
+
+CLI script for adding FINN listings manually. See `scripts/ingest/finn_manual.py`.
+
+### Multi-Layer Date Inheritance (2025-12-22) - IMPLEMENTED
+
+Three-tier building date fallback: median within 2km → nearest any distance → 1960.
+See `scripts/merge/merge_sources.py:inherit_dates_from_neighbors()`
 
 ### OSM-Centric Building Model (2025-12-20) - IMPLEMENTED
 
-OSM buildings as canonical geometry, dates attached from SEFRAK/FINN/MANUAL. Fallback year 1960.
+OSM buildings as canonical geometry, dates attached from SEFRAK/FINN/MANUAL.

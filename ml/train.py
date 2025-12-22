@@ -284,7 +284,7 @@ def save_checkpoint(model, optimizer, scheduler, epoch, best_metric, config, fil
 
 def load_checkpoint(model, optimizer, scheduler, filepath, device):
     """Load training checkpoint."""
-    checkpoint = torch.load(filepath, map_location=device)
+    checkpoint = torch.load(filepath, map_location=device, weights_only=False)
     model.load_state_dict(checkpoint['model_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     if scheduler and checkpoint['scheduler_state_dict']:
@@ -369,8 +369,7 @@ def train(config, resume_from=None):
             mode=config['training']['scheduler']['mode'],
             factor=config['training']['scheduler']['factor'],
             patience=config['training']['scheduler']['patience'],
-            min_lr=config['training']['scheduler']['min_lr'],
-            verbose=True
+            min_lr=config['training']['scheduler']['min_lr']
         )
         logger.info("Using ReduceLROnPlateau scheduler")
 
@@ -467,7 +466,7 @@ def train(config, resume_from=None):
 
     # Evaluate on test set
     logger.info("\nEvaluating on test set...")
-    model.load_state_dict(torch.load(config['paths']['best_model'])['model_state_dict'])
+    model.load_state_dict(torch.load(config['paths']['best_model'], weights_only=False)['model_state_dict'])
     test_metrics = evaluate(model, test_loader, device)
 
     logger.info("Test Set Results:")

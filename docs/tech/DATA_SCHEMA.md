@@ -570,3 +570,50 @@ Roads detected by ML are matched to OSM ways to inherit names and types:
 5. Inherit `nm` (name) and `rt` (road type) from best match
 
 Unmatched ML roads get `nm: null` and `rt: "unknown"`.
+
+---
+
+## Road Properties
+
+Road segments use segment-based tracking (split at intersections).
+
+### Core Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `src` | string | Source: osm, ml, man |
+| `sd` | int | Start date (construction year) |
+| `ed` | int/null | End date (removal/replacement year) |
+| `ev` | string | Evidence: h (high), m (medium), l (low) |
+| `change` | string | Change type relative to modern OSM |
+| `width` | float | Estimated width in meters |
+| `name` | string | Road name (from OSM) |
+
+### Change Types
+
+| Value | Description |
+|-------|-------------|
+| `same` | Unchanged geometry |
+| `widened` | Same centerline, increased width |
+| `rerouted` | Partial geometry change |
+| `replaced` | Completely new alignment |
+| `removed` | No longer exists in OSM |
+| `new` | Didn't exist historically |
+
+### Date Inference Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `sd_method` | string | How date was inferred: ml, building, bounded, fallback |
+| `sd_buildings` | int | Number of nearby buildings used for inference |
+| `sd_offset` | int | Years subtracted from building date (typically -2) |
+
+### Date Inference Logic
+
+Roads are dated using this fallback chain:
+1. **ML detection**: If road visible in dated historical map
+2. **Building-based**: Earliest nearby building date minus 2 years
+3. **Bounded**: Map era (1880, 1904, 1947) for ML roads
+4. **Fallback**: 1960
+
+The building-based method uses the insight that local roads are typically built 1-2 years before the houses they serve.

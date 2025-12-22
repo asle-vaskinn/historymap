@@ -36,7 +36,7 @@ def get_device() -> torch.device:
     return device
 
 
-def load_model(checkpoint_path: str, device: torch.device, num_classes: int = 5) -> torch.nn.Module:
+def load_model(checkpoint_path: str, device: torch.device, num_classes: int = 5, encoder_name: str = None) -> torch.nn.Module:
     """
     Load trained segmentation model from checkpoint.
 
@@ -44,6 +44,7 @@ def load_model(checkpoint_path: str, device: torch.device, num_classes: int = 5)
         checkpoint_path: Path to model checkpoint (.pth file)
         device: Device to load model on
         num_classes: Number of output classes (default: 5 for background, building, road, water, forest)
+        encoder_name: Encoder architecture (default: auto-detect from checkpoint)
 
     Returns:
         Loaded model in eval mode
@@ -51,25 +52,44 @@ def load_model(checkpoint_path: str, device: torch.device, num_classes: int = 5)
     if not os.path.exists(checkpoint_path):
         raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
 
+    # Load checkpoint first to detect config
+    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+
+    # Auto-detect encoder from checkpoint config if not specified
+    if encoder_name is None:
+        if isinstance(checkpoint, dict) and 'config' in checkpoint:
+            encoder_name = checkpoint['config'].get('model', {}).get('encoder', 'resnet34')
+            num_classes = checkpoint['config'].get('model', {}).get('classes', num_classes)
+            print(f"Auto-detected encoder: {encoder_name}, classes: {num_classes}")
+        else:
+            encoder_name = "resnet34"  # Default fallback
+
     # Initialize model architecture (must match training)
     model = smp.Unet(
-        encoder_name="resnet34",
+        encoder_name=encoder_name,
         encoder_weights=None,  # We'll load our trained weights
         in_channels=3,
         classes=num_classes,
     )
 
-    # Load checkpoint
-    checkpoint = torch.load(checkpoint_path, map_location=device)
-
     # Handle different checkpoint formats
     if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
-        model.load_state_dict(checkpoint['model_state_dict'])
+        state_dict = checkpoint['model_state_dict']
+
+        # Handle state dicts saved with "model." prefix (e.g., from PyTorch Lightning)
+        if any(k.startswith('model.') for k in state_dict.keys()):
+            state_dict = {k.replace('model.', ''): v for k, v in state_dict.items()}
+
+        model.load_state_dict(state_dict)
         print(f"Loaded checkpoint from epoch {checkpoint.get('epoch', 'unknown')}")
         if 'val_iou' in checkpoint:
             print(f"Model validation IoU: {checkpoint['val_iou']:.4f}")
     else:
-        model.load_state_dict(checkpoint)
+        state_dict = checkpoint
+        # Handle state dicts saved with "model." prefix
+        if any(k.startswith('model.') for k in state_dict.keys()):
+            state_dict = {k.replace('model.', ''): v for k, v in state_dict.items()}
+        model.load_state_dict(state_dict)
 
     model = model.to(device)
     model.eval()

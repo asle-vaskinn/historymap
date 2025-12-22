@@ -379,7 +379,7 @@ def inherit_dates_from_neighbors(
     Args:
         features: List of building features
         median_radius_m: Radius for median calculation (default: 2km)
-        exclude_sources: Sources to exclude from donors (default: ['sef'])
+        exclude_sources: Sources to exclude from donors (default: ['sefrak'])
 
     Returns:
         Tuple of (updated features, stats dict)
@@ -387,7 +387,7 @@ def inherit_dates_from_neighbors(
     import statistics
 
     if exclude_sources is None:
-        exclude_sources = ['sef']  # Exclude SEFRAK - heritage buildings are outliers
+        exclude_sources = ['sefrak']  # Exclude SEFRAK - heritage buildings are outliers
 
     if not HAS_SHAPELY:
         print("Warning: shapely not available, skipping date inheritance")

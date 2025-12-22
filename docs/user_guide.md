@@ -254,8 +254,8 @@ This application:
 ## Further Learning
 
 To learn more about:
-- **How the data was created**: See [methodology.md](methodology.md)
-- **Data sources and licensing**: See [data_sources.md](data_sources.md)
+- **How the data was created**: See [tech/methodology.md](tech/methodology.md)
+- **Data sources and licensing**: See [tech/data_sources.md](tech/data_sources.md)
 - **Technical details**: See the main README.md in the repository
 - **Project background**: See HISTORICAL_MAP_PROJECT_PLAN.md
 

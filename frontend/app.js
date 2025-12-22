@@ -75,6 +75,15 @@ let mlSourceFilter = snapshotFilter;
 // ON (debug): Additional source filtering - can show/hide individual sources
 let sourceFilterEnabled = false;
 
+// Debug color mode - shows date sources and inheritance methods
+// OFF: Normal era-based coloring
+// ON: Color by sd_src (date source) and sd_method (inheritance method)
+let debugColorMode = false;
+
+// Edit mode state
+let editMode = false;
+let editPopup = null;
+
 // Road source filter
 let roadSourceFilter = {
     nvdb: true,        // NVDB official road database (with construction dates)
@@ -475,31 +484,52 @@ function createMapStyle(year) {
                     'line-opacity': 0.6
                 }
             },
+            // Removed roads layer (dashed, rendered first/below)
             {
-                id: 'roads-historical',
+                id: 'roads-historical-removed',
                 type: 'line',
                 source: 'roads-temporal',
-                filter: createRoadFilter(year),
+                filter: ['all', createRoadFilter(year), ['==', ['get', 'ct'], 'removed']],
                 layout: {
                     'visibility': layerVisibility.roadsHistorical ? 'visible' : 'none',
                     'line-cap': 'round',
                     'line-join': 'round'
                 },
                 paint: {
-                    // Color by era based on start date
+                    'line-color': '#dc2626',  // Red
+                    'line-width': [
+                        'interpolate',
+                        ['exponential', 1.5],
+                        ['zoom'],
+                        10, 1.5,
+                        14, 3.5
+                    ],
+                    'line-opacity': 0.6,
+                    'line-dasharray': [2, 2]
+                }
+            },
+            // Active roads layer (solid lines, excludes removed)
+            {
+                id: 'roads-historical',
+                type: 'line',
+                source: 'roads-temporal',
+                filter: ['all', createRoadFilter(year), ['!=', ['get', 'ct'], 'removed']],
+                layout: {
+                    'visibility': layerVisibility.roadsHistorical ? 'visible' : 'none',
+                    'line-cap': 'round',
+                    'line-join': 'round'
+                },
+                paint: {
+                    // Color by change type
                     'line-color': [
-                        'case',
-                        // Pre-1880 roads (detected in 1880 map)
-                        ['all', ['has', 'sd'], ['<=', ['get', 'sd'], 1880]],
-                        '#4a5568',  // Dark slate
-                        // 1880-1904
-                        ['all', ['has', 'sd'], ['<=', ['get', 'sd'], 1904]],
-                        '#718096',  // Slate gray
-                        // 1904-1947
-                        ['all', ['has', 'sd'], ['<=', ['get', 'sd'], 1947]],
-                        '#a0aec0',  // Gray
-                        // Post-1947 / Modern
-                        '#cbd5e0'   // Light gray
+                        'match',
+                        ['get', 'ct'],
+                        'same', '#888888',      // Neutral gray
+                        'widened', '#4a90d9',   // Blue
+                        'rerouted', '#d97706',  // Orange
+                        'replaced', '#7c3aed',  // Purple
+                        'new', '#16a34a',       // Green
+                        '#888888'               // Default: neutral gray
                     ],
                     'line-width': [
                         'interpolate',
@@ -987,7 +1017,9 @@ function createRoadDateRangeFilter() {
 
 /**
  * Create temporal and era-based filter for roads
- * Rules similar to buildings but simpler (no exact dates, only ML bounds):
+ * Rules:
+ * - Show roads if sd <= currentYear (road existed by this year)
+ * - Hide removed roads if ed <= currentYear (road was removed by this year)
  * - Post-1950: show all roads
  * - 1900-1950: show if has evidence OR no date (modern)
  * - Pre-1900: only show with evidence AND sd <= year
@@ -995,7 +1027,8 @@ function createRoadDateRangeFilter() {
  * @returns {array} MapLibre filter expression
  */
 function createRoadFilter(year) {
-    // Build temporal filter (sd <= year AND (ed is null OR ed >= year))
+    // Build temporal filter (sd <= year AND (ed is null OR ed > year))
+    // Note: Removed roads should hide when ed <= year
     const temporalFilter = [
         'all',
         // start_date <= year OR no start_date (show modern roads)
@@ -1004,11 +1037,12 @@ function createRoadFilter(year) {
             ['==', ['has', 'sd'], false],
             ['<=', ['get', 'sd'], year]
         ],
-        // end_date >= year OR no end_date (road still exists)
+        // end_date > year OR no end_date (road still exists at this year)
+        // Changed from >= to > so roads hide in the year they were removed
         [
             'any',
             ['==', ['has', 'ed'], false],
-            ['>=', ['get', 'ed'], year]
+            ['>', ['get', 'ed'], year]
         ]
     ];
 
@@ -1117,7 +1151,91 @@ function initMap() {
                 console.error('Buildings layer not found!');
             }
 
+            // Initialize manual edits overlay layer
+            initManualEditsLayer();
+
+            // Load manual edits data
+            loadManualEdits();
+
             hideLoading();
+
+            // Add click handler for roads
+            map.on('click', 'roads-historical', (e) => {
+                if (e.features.length > 0) {
+                    const props = e.features[0].properties;
+
+                    // Map change type codes to human-readable labels
+                    const changeTypeLabels = {
+                        'same': 'Unchanged',
+                        'widened': 'Widened',
+                        'rerouted': 'Rerouted',
+                        'replaced': 'Replaced',
+                        'removed': 'Removed',
+                        'new': 'New'
+                    };
+
+                    // Map date method codes to human-readable labels
+                    const dateMethodLabels = {
+                        'direct': 'Direct dating',
+                        'inferred': 'Inferred from map',
+                        'estimated': 'Estimated',
+                        'unknown': 'Unknown method'
+                    };
+
+                    const changeType = changeTypeLabels[props.ct] || props.ct || 'Unknown';
+                    const dateMethod = dateMethodLabels[props.sd_method] || props.sd_method || 'Unknown';
+
+                    const html = `
+                        <div style="max-width: 280px; font-family: system-ui, sans-serif;">
+                            <h3 style="margin: 0 0 8px 0; color: #2c3e50;">${props.nm || 'Road'}</h3>
+                            <p style="margin: 4px 0;"><strong>Change type:</strong> <span style="color: ${getChangeTypeColor(props.ct)}">${changeType}</span></p>
+                            ${props.sd ? `<p style="margin: 4px 0;"><strong>Construction year:</strong> ${props.sd}</p>` : ''}
+                            ${props.ed ? `<p style="margin: 4px 0;"><strong>End year:</strong> ${props.ed}</p>` : ''}
+                            ${props.sd_method ? `<p style="margin: 4px 0;"><strong>Date method:</strong> ${dateMethod}</p>` : ''}
+                            ${props.ev ? `<p style="margin: 4px 0;"><strong>Evidence:</strong> ${getEvidenceLabel(props.ev)}</p>` : ''}
+                        </div>
+                    `;
+
+                    new maplibregl.Popup({ closeButton: true, maxWidth: '300px' })
+                        .setLngLat(e.lngLat)
+                        .setHTML(html)
+                        .addTo(map);
+                }
+            });
+
+            // Change cursor on hover for roads
+            map.on('mouseenter', 'roads-historical', () => {
+                map.getCanvas().style.cursor = 'pointer';
+            });
+            map.on('mouseleave', 'roads-historical', () => {
+                map.getCanvas().style.cursor = '';
+            });
+
+            // Add click handler for removed roads (same popup logic)
+            map.on('click', 'roads-historical-removed', (e) => {
+                if (e.features.length > 0) {
+                    const props = e.features[0].properties;
+                    const html = `
+                        <div style="max-width: 280px; font-family: system-ui, sans-serif;">
+                            <h3 style="margin: 0 0 8px 0; color: #dc2626;">${props.nm || 'Road'}</h3>
+                            <p style="margin: 4px 0;"><strong>Status:</strong> <span style="color: #dc2626">Removed</span></p>
+                            ${props.sd ? `<p style="margin: 4px 0;"><strong>Construction year:</strong> ${props.sd}</p>` : ''}
+                            ${props.ed ? `<p style="margin: 4px 0;"><strong>Removed:</strong> ${props.ed}</p>` : ''}
+                            ${props.ev ? `<p style="margin: 4px 0;"><strong>Evidence:</strong> ${getEvidenceLabel(props.ev)}</p>` : ''}
+                        </div>
+                    `;
+                    new maplibregl.Popup({ closeButton: true, maxWidth: '300px' })
+                        .setLngLat(e.lngLat)
+                        .setHTML(html)
+                        .addTo(map);
+                }
+            });
+            map.on('mouseenter', 'roads-historical-removed', () => {
+                map.getCanvas().style.cursor = 'pointer';
+            });
+            map.on('mouseleave', 'roads-historical-removed', () => {
+                map.getCanvas().style.cursor = '';
+            });
 
             // Add click handler for Finn markers
             map.on('click', 'finn-markers', (e) => {
@@ -1149,6 +1267,23 @@ function initMap() {
             });
             map.on('mouseleave', 'finn-markers', () => {
                 map.getCanvas().style.cursor = '';
+            });
+
+            // Add click handler for buildings (edit mode)
+            map.on('click', 'buildings', (e) => {
+                handleBuildingClickForEdit(e);
+            });
+
+            // Change cursor on hover for buildings (when in edit mode)
+            map.on('mouseenter', 'buildings', () => {
+                if (editMode) {
+                    map.getCanvas().style.cursor = 'pointer';
+                }
+            });
+            map.on('mouseleave', 'buildings', () => {
+                if (editMode) {
+                    map.getCanvas().style.cursor = 'pointer';
+                }
             });
         });
 
@@ -1252,9 +1387,16 @@ function updateLayerFilters(year) {
 
     // Update historical road filters
     const roadFilter = createRoadFilter(year);
-    ['roads-historical-background', 'roads-historical'].forEach(layerId => {
+    ['roads-historical-background', 'roads-historical', 'roads-historical-removed'].forEach(layerId => {
         if (map.getLayer(layerId)) {
-            map.setFilter(layerId, roadFilter);
+            // For removed roads, combine base filter with ct='removed' check
+            if (layerId === 'roads-historical-removed') {
+                map.setFilter(layerId, ['all', roadFilter, ['==', ['get', 'ct'], 'removed']]);
+            } else if (layerId === 'roads-historical') {
+                map.setFilter(layerId, ['all', roadFilter, ['!=', ['get', 'ct'], 'removed']]);
+            } else {
+                map.setFilter(layerId, roadFilter);
+            }
         }
     });
 
@@ -1289,7 +1431,7 @@ function toggleLayer(layerName) {
             const layerMapping = {
                 buildings: ['buildings', 'buildings-outline'],
                 roads: ['roads', 'roads-background'],
-                roadsHistorical: ['roads-historical', 'roads-historical-background'],
+                roadsHistorical: ['roads-historical', 'roads-historical-background', 'roads-historical-removed'],
                 water: ['water', 'water-outline'],
                 confidenceOverlay: ['confidence-overlay']
             };
@@ -1802,6 +1944,22 @@ function initControls() {
         });
     }
 
+    // Step back button
+    const stepBackBtn = document.getElementById('stepBackBtn');
+    if (stepBackBtn) {
+        stepBackBtn.addEventListener('click', () => {
+            stepYear(-1);
+        });
+    }
+
+    // Step forward button
+    const stepFwdBtn = document.getElementById('stepFwdBtn');
+    if (stepFwdBtn) {
+        stepFwdBtn.addEventListener('click', () => {
+            stepYear(1);
+        });
+    }
+
     // Initialize minimal layer toggle buttons
     initLayerToggles();
 
@@ -1824,60 +1982,307 @@ function initControls() {
  * Initialize minimal layer toggle buttons
  */
 function initLayerToggles() {
-    // Buildings toggle
-    const buildingsBtn = document.getElementById('toggleBuildings');
-    if (buildingsBtn) {
-        buildingsBtn.addEventListener('click', () => {
-            buildingsBtn.classList.toggle('active');
-            const visible = buildingsBtn.classList.contains('active');
-            toggleBuildingsLayer(visible);
+    // Background toggle - hides roads, landuse, labels (but keeps water visible)
+    const backgroundBtn = document.getElementById('toggleBackground');
+    if (backgroundBtn) {
+        backgroundBtn.addEventListener('click', () => {
+            backgroundBtn.classList.toggle('active');
+            const visible = backgroundBtn.classList.contains('active');
+            toggleBackgroundLayers(visible);
         });
     }
 
-    // Roads toggle
-    const roadsBtn = document.getElementById('toggleRoads');
-    if (roadsBtn) {
-        roadsBtn.addEventListener('click', () => {
-            roadsBtn.classList.toggle('active');
-            const visible = roadsBtn.classList.contains('active');
-            toggleRoadsLayer(visible);
-        });
-    }
+    // Debug mode toggle - shows date sources with color coding
+    const debugBtn = document.getElementById('toggleDebug');
+    const debugLegend = document.getElementById('debugLegend');
+    if (debugBtn) {
+        debugBtn.addEventListener('click', () => {
+            debugColorMode = !debugColorMode;
+            debugBtn.classList.toggle('active', debugColorMode);
+            console.log('Debug color mode:', debugColorMode ? 'ON' : 'OFF');
 
-    // Snapshots toggle (cycles through: off -> 1880 -> 1904 -> 1947 -> off)
-    const snapshotsBtn = document.getElementById('toggleSnapshots');
-    if (snapshotsBtn) {
-        const snapshots = ['off', 'kv1880', 'kv1904', 'air1947'];
-        let currentSnapshotIndex = 0;
-
-        snapshotsBtn.addEventListener('click', () => {
-            currentSnapshotIndex = (currentSnapshotIndex + 1) % snapshots.length;
-            const snapshot = snapshots[currentSnapshotIndex];
-
-            // Update button state and label
-            if (snapshot === 'off') {
-                snapshotsBtn.classList.remove('active');
-                snapshotsBtn.querySelector('.toggle-label').textContent = '1880';
-                // Disable all snapshot checkboxes
-                document.querySelectorAll('[data-snapshot-source]').forEach(cb => {
-                    cb.checked = false;
-                });
-            } else {
-                snapshotsBtn.classList.add('active');
-                const labels = { 'kv1880': '1880', 'kv1904': '1904', 'air1947': '1947' };
-                snapshotsBtn.querySelector('.toggle-label').textContent = labels[snapshot];
-                // Enable only this snapshot
-                document.querySelectorAll('[data-snapshot-source]').forEach(cb => {
-                    cb.checked = cb.dataset.snapshotSource === snapshot;
-                });
+            // Show/hide legend
+            if (debugLegend) {
+                debugLegend.style.display = debugColorMode ? 'block' : 'none';
             }
 
-            // Trigger map update
+            // Update building paint
             if (map && map.loaded()) {
-                updateMapYear(currentYear);
+                updateBuildingPaint();
             }
         });
     }
+
+    // Edit mode toggle
+    const editBtn = document.getElementById('toggleEdit');
+    if (editBtn) {
+        editBtn.addEventListener('click', () => {
+            toggleEditMode();
+        });
+    }
+}
+
+/**
+ * Toggle edit mode
+ */
+function toggleEditMode() {
+    editMode = !editMode;
+    const editBtn = document.getElementById('toggleEdit');
+    if (editBtn) {
+        editBtn.classList.toggle('active', editMode);
+    }
+
+    // Change cursor
+    if (map) {
+        map.getCanvas().style.cursor = editMode ? 'pointer' : 'grab';
+    }
+
+    console.log('Edit mode:', editMode ? 'ON' : 'OFF');
+}
+
+/**
+ * Handle building click for edit mode
+ */
+function handleBuildingClickForEdit(e) {
+    if (!editMode) return;
+    if (e.features.length === 0) return;
+
+    const feature = e.features[0];
+    const props = feature.properties;
+
+    // Extract building data
+    const buildingData = {
+        sd: props.sd || '',
+        ed: props.ed || null,
+        ev: props.ev || '',
+        sd_src: props.sd_src || '',
+        sd_method: props.sd_method || '',
+        osm_id: props._src_id || props.osm_id || ''
+    };
+
+    showEditPopup(buildingData, e.lngLat, feature.geometry);
+}
+
+/**
+ * Show edit popup for a building
+ */
+function showEditPopup(buildingData, coordinates, geometry) {
+    // Close existing popup if any
+    if (editPopup) {
+        editPopup.remove();
+    }
+
+    const html = `
+        <div class="edit-popup">
+            <h3>Edit Building</h3>
+            <div class="current-values">
+                <div><strong>Built:</strong> ${buildingData.sd || 'N/A'}</div>
+                <div><strong>Demolished:</strong> ${buildingData.ed || 'N/A'}</div>
+                <div><strong>Evidence:</strong> ${buildingData.ev || 'N/A'}</div>
+                <div><strong>Source:</strong> ${buildingData.sd_src || 'N/A'}</div>
+                <div><strong>Method:</strong> ${buildingData.sd_method || 'N/A'}</div>
+            </div>
+            <div class="edit-form">
+                <label>
+                    Construction Year:
+                    <input type="number" id="editSd" value="${buildingData.sd}" min="1700" max="2025" />
+                </label>
+                <label>
+                    Demolition Year (optional):
+                    <input type="number" id="editEd" value="${buildingData.ed || ''}" min="1700" max="2025" />
+                </label>
+                <div class="edit-actions">
+                    <button id="saveEdit" class="save-btn">Save</button>
+                    <button id="cancelEdit" class="cancel-btn">Cancel</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    editPopup = new maplibregl.Popup({
+        closeButton: false,
+        closeOnClick: false,
+        maxWidth: '320px'
+    })
+        .setLngLat(coordinates)
+        .setHTML(html)
+        .addTo(map);
+
+    // Add event listeners after popup is added to DOM
+    setTimeout(() => {
+        const saveBtn = document.getElementById('saveEdit');
+        const cancelBtn = document.getElementById('cancelEdit');
+
+        if (saveBtn) {
+            saveBtn.addEventListener('click', () => {
+                const newSd = parseInt(document.getElementById('editSd').value);
+                const edValue = document.getElementById('editEd').value;
+                const newEd = edValue ? parseInt(edValue) : null;
+
+                saveManualEdit(buildingData.osm_id, geometry, newSd, newEd);
+            });
+        }
+
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', () => {
+                if (editPopup) {
+                    editPopup.remove();
+                    editPopup = null;
+                }
+            });
+        }
+    }, 100);
+}
+
+/**
+ * Save manual edit to backend
+ */
+async function saveManualEdit(osmId, geometry, newSd, newEd) {
+    try {
+        const response = await fetch('http://localhost:5001/api/manual', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                osm_id: osmId,
+                geometry: geometry,
+                sd: newSd,
+                ed: newEd
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Server responded with ${response.status}`);
+        }
+
+        const result = await response.json();
+        console.log('Manual edit saved:', result);
+
+        // Close popup
+        if (editPopup) {
+            editPopup.remove();
+            editPopup = null;
+        }
+
+        // TODO: Add to overlay layer (will implement next)
+        alert('Building data saved successfully! Refresh the page to see changes.');
+
+    } catch (error) {
+        console.error('Failed to save manual edit:', error);
+        alert('Failed to save: ' + error.message);
+    }
+}
+
+/**
+ * Update building layer paint based on debug mode
+ * Debug mode shows date sources and inheritance methods
+ */
+function updateBuildingPaint() {
+    if (!map || !map.getLayer('buildings')) return;
+
+    if (debugColorMode) {
+        // Debug colors by date source and inheritance method
+        // Colors:
+        //   Direct dates: finn=blue, sefrak=brown, manual=green, osm=gray
+        //   Inherited: median=yellow, nearest=orange, fallback=red
+        map.setPaintProperty('buildings', 'fill-color', [
+            'case',
+            // Fallback (red) - worst quality
+            ['==', ['get', 'sd_method'], 'fallback'],
+            '#e74c3c',
+            // Nearest neighbor inherited (orange)
+            ['==', ['get', 'sd_method'], 'nearest'],
+            '#e67e22',
+            // Median inherited (yellow)
+            ['==', ['get', 'sd_method'], 'median'],
+            '#f1c40f',
+            // Direct from manual (green)
+            ['==', ['get', 'sd_src'], 'manual'],
+            '#2ecc71',
+            // Direct from FINN (blue)
+            ['==', ['get', 'sd_src'], 'finn'],
+            '#3498db',
+            // Direct from SEFRAK (brown)
+            ['==', ['get', 'sd_src'], 'sefrak'],
+            '#8b4513',
+            // Direct from Trondheim Kommune (purple)
+            ['==', ['get', 'sd_src'], 'tk'],
+            '#9b59b6',
+            // Direct from Matrikkelen (teal)
+            ['==', ['get', 'sd_src'], 'mat'],
+            '#1abc9c',
+            // OSM or unknown (gray)
+            '#95a5a6'
+        ]);
+
+        // Simpler outline in debug mode
+        map.setPaintProperty('buildings-outline', 'line-color', '#2c3e50');
+    } else {
+        // Normal era-based coloring
+        map.setPaintProperty('buildings', 'fill-color', [
+            'case',
+            // Manual (researcher verified) - green
+            ['==', ['get', 'src'], 'man'],
+            '#2ecc71',
+            // SEFRAK buildings (historical colors by age)
+            ['==', ['get', 'src'], 'sef'],
+            [
+                'interpolate',
+                ['linear'],
+                ['coalesce', ['get', 'sd'], 1850],
+                1700, '#8b6914',
+                1800, '#a67c2c',
+                1850, '#b89968',
+                1900, '#c9a876'
+            ],
+            // ML-verified buildings (brown)
+            ['==', ['get', 'src'], 'ml'],
+            '#8b4513',
+            // Default (modern/unknown)
+            '#d4a373'
+        ]);
+
+        // Normal outline coloring
+        map.setPaintProperty('buildings-outline', 'line-color', [
+            'case',
+            ['==', ['get', 'src'], 'man'], '#1a8c4a',
+            ['==', ['get', 'src'], 'ml'], '#5c2e0d',
+            ['==', ['get', 'src'], 'sef'], '#5c4a1c',
+            '#8b6f47'
+        ]);
+    }
+}
+
+/**
+ * Toggle background layers visibility
+ * Hides: roads layers, landuse layers, labels
+ * Keeps: water visible
+ */
+function toggleBackgroundLayers(visible) {
+    if (!map || !map.loaded()) return;
+    const visibility = visible ? 'visible' : 'none';
+
+    // Hide/show roads
+    const roadLayers = ['roads', 'roads-background', 'roads-line', 'roads-outline',
+                        'roads-historical', 'roads-historical-background', 'roads-historical-removed'];
+    roadLayers.forEach(layerId => {
+        if (map.getLayer(layerId)) {
+            map.setLayoutProperty(layerId, 'visibility', visibility);
+        }
+    });
+
+    // Hide/show landuse
+    if (map.getLayer('landuse')) {
+        map.setLayoutProperty('landuse', 'visibility', visibility);
+    }
+
+    // Hide/show labels
+    if (map.getLayer('place-labels')) {
+        map.setLayoutProperty('place-labels', 'visibility', visibility);
+    }
+
+    console.log('Background layers visibility:', visible ? 'visible' : 'hidden');
 }
 
 /**
@@ -2260,6 +2665,37 @@ function showError(message) {
 }
 
 /**
+ * Get color for change type
+ * @param {string} changeType - Change type code
+ * @returns {string} Color hex code
+ */
+function getChangeTypeColor(changeType) {
+    const colors = {
+        'same': '#888888',
+        'widened': '#4a90d9',
+        'rerouted': '#d97706',
+        'replaced': '#7c3aed',
+        'removed': '#dc2626',
+        'new': '#16a34a'
+    };
+    return colors[changeType] || '#888888';
+}
+
+/**
+ * Get human-readable label for evidence level
+ * @param {string} evidence - Evidence code (h/m/l)
+ * @returns {string} Human-readable label
+ */
+function getEvidenceLabel(evidence) {
+    const labels = {
+        'h': 'High confidence',
+        'm': 'Medium confidence',
+        'l': 'Low confidence'
+    };
+    return labels[evidence] || evidence;
+}
+
+/**
  * Parse URL parameters and apply initial state
  */
 function applyUrlParams() {
@@ -2297,6 +2733,162 @@ function applyUrlParams() {
             currentYear = year;
             const slider = document.getElementById('yearSlider');
             if (slider) slider.value = year;
+        }
+    }
+}
+
+/**
+ * Phase 4: Initialize manual edits overlay layer
+ * Creates a GeoJSON source and layers for displaying manual edits
+ */
+function initManualEditsLayer() {
+    if (!map) return;
+
+    // Add empty GeoJSON source for manual edits
+    map.addSource('manual-edits', {
+        type: 'geojson',
+        data: {
+            type: 'FeatureCollection',
+            features: []
+        }
+    });
+
+    // Add fill layer with green color
+    map.addLayer({
+        id: 'manual-edits-fill',
+        type: 'fill',
+        source: 'manual-edits',
+        paint: {
+            'fill-color': '#2ecc71',
+            'fill-opacity': 0.6
+        }
+    });
+
+    // Add outline layer with dark green dashed pattern
+    map.addLayer({
+        id: 'manual-edits-outline',
+        type: 'line',
+        source: 'manual-edits',
+        paint: {
+            'line-color': '#1a8c4a',
+            'line-width': 2,
+            'line-dasharray': [2, 2]
+        }
+    });
+
+    console.log('Manual edits overlay layer initialized');
+}
+
+/**
+ * Phase 4: Load manual edits from API
+ * Fetches manual edits data and updates the overlay
+ */
+async function loadManualEdits() {
+    if (!map) return;
+
+    try {
+        const response = await fetch('http://localhost:5001/api/manual');
+        if (!response.ok) {
+            console.warn('Could not load manual edits:', response.status);
+            return;
+        }
+
+        const data = await response.json();
+
+        // Update the manual-edits source with the data
+        const source = map.getSource('manual-edits');
+        if (source) {
+            source.setData(data);
+            console.log('Loaded manual edits:', data.features ? data.features.length : 0, 'features');
+        }
+    } catch (error) {
+        console.warn('Failed to load manual edits:', error);
+    }
+}
+
+/**
+ * Phase 4: Add a feature to the manual edits overlay
+ * Called after successful save in saveManualEdit()
+ * @param {object} feature - GeoJSON feature to add
+ */
+function addToManualEditsOverlay(feature) {
+    if (!map) return;
+
+    const source = map.getSource('manual-edits');
+    if (!source) return;
+
+    // Get current data
+    const currentData = source._data || { type: 'FeatureCollection', features: [] };
+
+    // Add new feature
+    currentData.features.push(feature);
+
+    // Update source
+    source.setData(currentData);
+
+    console.log('Added feature to manual edits overlay');
+}
+
+/**
+ * Phase 5: Clear the manual edits overlay
+ * Called after successful rebuild
+ */
+function clearManualEditsOverlay() {
+    if (!map) return;
+
+    const source = map.getSource('manual-edits');
+    if (source) {
+        source.setData({
+            type: 'FeatureCollection',
+            features: []
+        });
+        console.log('Cleared manual edits overlay');
+    }
+}
+
+/**
+ * Phase 5: Trigger rebuild of PMTiles
+ * POSTs to rebuild API endpoint and reloads page on success
+ */
+async function triggerRebuild() {
+    const statusEl = document.getElementById('rebuildStatus');
+
+    // Show "Rebuilding..." status
+    if (statusEl) {
+        statusEl.textContent = 'Rebuilding...';
+        statusEl.style.display = 'block';
+    }
+
+    try {
+        const response = await fetch('http://localhost:5001/api/rebuild', {
+            method: 'POST'
+        });
+
+        if (!response.ok) {
+            throw new Error(`Rebuild failed: ${response.status}`);
+        }
+
+        const result = await response.json();
+        console.log('Rebuild result:', result);
+
+        // Show success message
+        if (statusEl) {
+            statusEl.textContent = 'Complete!';
+        }
+
+        // Clear the manual edits overlay
+        clearManualEditsOverlay();
+
+        // Reload page after 2 seconds to get fresh PMTiles
+        setTimeout(() => {
+            window.location.reload();
+        }, 2000);
+
+    } catch (error) {
+        console.error('Rebuild failed:', error);
+        if (statusEl) {
+            statusEl.textContent = 'Error: ' + error.message;
+            statusEl.style.color = '#dc3545';
         }
     }
 }

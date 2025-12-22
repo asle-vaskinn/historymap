@@ -155,6 +155,16 @@
   "output": {
     "include_source_breakdown": true,
     "preserve_all_sources": true,
-    "output_file": "buildings_merged.geojson"
+    "output_file": "buildings_merged.geojson",
+    "unmatched_output_file": "buildings_unmatched.geojson"
+  },
+
+  "osm_centric": {
+    "enabled": true,
+    "base_source": "osm",
+    "date_sources": ["manual", "finn", "sefrak"],
+    "fallback_year": 1960,
+    "manual_keeps_geometry": true,
+    "notes": "OSM buildings are canonical geometry. Date sources attach to OSM. Buildings without dates shown only for years >= fallback_year."
   }
 }

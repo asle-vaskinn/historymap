@@ -1,0 +1,96 @@
+# Training Configuration for 1937 Aerial Photo Building Extraction
+# Uses OSM buildings as pseudo-labels
+
+model:
+  encoder: resnet18        # Lighter model, sufficient for binary segmentation
+  pretrained: true
+  classes: 2               # Binary: background (0), building (1)
+
+training:
+  epochs: 30
+  batch_size: 8            # Smaller batch for limited data
+  learning_rate: 0.0005    # Lower LR for fine-tuning
+  optimizer: adam
+  weight_decay: 0.0001
+
+  loss: dice
+
+  scheduler:
+    type: reduce_on_plateau
+    mode: max
+    factor: 0.5
+    patience: 3
+    min_lr: 0.00001
+
+  early_stopping:
+    enabled: true
+    patience: 8
+    metric: val_iou
+    mode: max
+
+  mixed_precision: true
+  grad_clip: 1.0
+  save_freq: 5
+  save_best_only: true
+
+data:
+  train_split: 0.7
+  val_split: 0.2
+  test_split: 0.1          # Small test split for evaluation
+
+  image_size: 512
+  normalize: true
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]
+
+  augmentation:
+    enabled: true
+    horizontal_flip: 0.5
+    vertical_flip: 0.5
+    rotation: 30           # More rotation for aerial photos
+    scale: [0.8, 1.2]
+    brightness: 0.3        # More variation for old B&W photos
+    contrast: 0.3
+    saturation: 0.0        # No saturation change (grayscale)
+    hue: 0.0
+
+  class_weights: null
+  num_workers: 4
+  pin_memory: true
+
+paths:
+  data_dir: ../data/training_1937
+  checkpoint_dir: ../models/checkpoints_1937
+  log_dir: ../results/training_logs_1937
+  best_model: ../models/checkpoints_1937/best_model_1937.pth
+  last_checkpoint: ../models/checkpoints_1937/last_checkpoint.pth
+
+logging:
+  console_level: INFO
+  file_level: DEBUG
+  log_file: true
+  use_tqdm: true
+  print_freq: 5
+  val_freq: 1
+
+device: auto
+seed: 42
+
+metrics:
+  compute_iou: true
+  compute_accuracy: true
+  compute_confusion_matrix: true
+  iou_threshold: 0.5
+
+class_names:
+  0: background
+  1: building
+
+vectorize:
+  separate_classes: false
+  classes_to_export:
+    - building
+  output_dirs:
+    building: buildings/
+  min_area_m2: 20          # Buildings should be at least 20m²
+  simplify_tolerance: 1.0

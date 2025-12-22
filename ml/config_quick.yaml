@@ -1,0 +1,85 @@
+# Quick training config for testing with small synthetic dataset
+model:
+  encoder: resnet18      # Lighter model for faster training
+  pretrained: true
+  classes: 5
+
+training:
+  epochs: 50             # More epochs for better learning
+  batch_size: 8          # Larger batch for 600+ samples
+  learning_rate: 0.001
+  optimizer: adam
+  weight_decay: 0.0001
+  loss: dice
+
+  scheduler:
+    type: reduce_on_plateau
+    mode: max
+    factor: 0.5
+    patience: 3
+    min_lr: 0.000001
+
+  early_stopping:
+    enabled: true
+    patience: 7
+    metric: val_iou
+    mode: max
+
+  mixed_precision: false  # Disable for compatibility
+  grad_clip: 1.0
+  save_freq: 5
+  save_best_only: true
+
+data:
+  train_split: 0.7       # 70% train (19 samples)
+  val_split: 0.15        # 15% val (4 samples)
+  test_split: 0.15       # 15% test (4 samples)
+
+  image_size: 512
+  normalize: true
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]
+
+  augmentation:
+    enabled: true
+    horizontal_flip: 0.5
+    vertical_flip: 0.5
+    rotation: 15
+    scale: [0.9, 1.1]
+    brightness: 0.1
+    contrast: 0.1
+
+  class_weights: null
+  num_workers: 2
+  pin_memory: true
+
+paths:
+  data_dir: ../data/synthetic/train
+  checkpoint_dir: ../models/checkpoints
+  log_dir: ../results/training_logs
+  best_model: ../models/checkpoints/best_model.pth
+  last_checkpoint: ../models/checkpoints/last_checkpoint.pth
+
+logging:
+  console_level: INFO
+  file_level: DEBUG
+  log_file: true
+  use_tqdm: true
+  print_freq: 5
+  val_freq: 1
+
+device: auto
+seed: 42
+
+metrics:
+  compute_iou: true
+  compute_accuracy: true
+  compute_confusion_matrix: true
+  iou_threshold: 0.5
+
+class_names:
+  0: background
+  1: building
+  2: road
+  3: water
+  4: forest

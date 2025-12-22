@@ -15,7 +15,8 @@ const SOURCES = {
             layers: 'amt1',
             attribution: '© Kartverket'
         },
-        buildings: 'data/sources/ml_detected/kartverket_1904/normalized/buildings.geojson'
+        buildings: 'data/sources/ml_detected/kartverket_1904/normalized/buildings.geojson',
+        roads: 'data/sources/ml_detected/kartverket_1880/roads/roads.geojson'  // ML-extracted roads
     },
     gen1880: {
         name: 'Generated 1880 (PoC)',
@@ -28,6 +29,7 @@ const SOURCES = {
             attribution: '© Kartverket'
         },
         buildings: 'data/sources/generated/kv1880/buildings_test.geojson',
+        roads: 'data/sources/ml_detected/kartverket_1880/roads/roads.geojson',  // ML-extracted roads
         generatedMode: true  // Use special styling for generated buildings
     },
     ortofoto1937: {
@@ -79,6 +81,7 @@ const DEFAULT_ZOOM = 13;
 let map = null;
 let currentSource = 'amt1';
 let buildingsData = null;
+let roadsData = null;  // ML-extracted roads
 let annotations = {};  // osm_id -> { existed: bool, annotated: true }
 let annotationPopup = null;
 let ws = null;  // WebSocket for logs
@@ -220,6 +223,25 @@ async function loadSource(sourceId) {
         document.getElementById('stats').textContent = `${source.name} (${source.year})`;
     }
 
+    // Load roads GeoJSON (if available)
+    if (source.roads) {
+        try {
+            const response = await fetch(source.roads);
+            roadsData = await response.json();
+            const roadCount = roadsData.features?.length || 0;
+            console.log(`Loaded ${roadCount} road segments`);
+
+            // Update stats to include roads
+            const buildingCount = buildingsData?.features?.length || 0;
+            document.getElementById('stats').textContent = `${buildingCount} buildings, ${roadCount} roads`;
+        } catch (err) {
+            console.error('Failed to load roads:', err);
+            roadsData = null;
+        }
+    } else {
+        roadsData = null;
+    }
+
     // Setup layers for current view
     setupLayers();
 
@@ -238,12 +260,13 @@ function setupLayers() {
 
     // Remove existing layers and sources
     const layersToRemove = ['raster-0', 'raster-1', 'raster-2', 'raster-3',
-                           'buildings-overlay', 'buildings-annotation-border'];
+                           'buildings-overlay', 'buildings-annotation-border',
+                           'roads-overlay', 'roads-outline'];
     layersToRemove.forEach(id => {
         if (map.getLayer(id)) map.removeLayer(id);
     });
 
-    const sourcesToRemove = ['raster-0', 'raster-1', 'raster-2', 'raster-3', 'buildings'];
+    const sourcesToRemove = ['raster-0', 'raster-1', 'raster-2', 'raster-3', 'buildings', 'roads'];
     sourcesToRemove.forEach(id => {
         if (map.getSource(id)) map.removeSource(id);
     });
@@ -384,6 +407,38 @@ function setupLayers() {
                 }
             });
         }
+    }
+
+    // Overlay roads if available (LineStrings)
+    if (roadsData) {
+        map.addSource('roads', {
+            type: 'geojson',
+            data: roadsData
+        });
+
+        // Road outline (wider, darker)
+        map.addLayer({
+            id: 'roads-outline',
+            type: 'line',
+            source: 'roads',
+            paint: {
+                'line-color': '#8B0000',  // Dark red
+                'line-width': 4,
+                'line-opacity': 0.6
+            }
+        });
+
+        // Road centerline (narrower, brighter)
+        map.addLayer({
+            id: 'roads-overlay',
+            type: 'line',
+            source: 'roads',
+            paint: {
+                'line-color': '#FF6B6B',  // Coral red
+                'line-width': 2,
+                'line-opacity': 0.9
+            }
+        });
     }
 }
 

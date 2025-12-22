@@ -86,6 +86,10 @@ class AnnotationHelper:
         self.drawing = False
         self.last_x = None
         self.last_y = None
+        self.fill_mode = False  # Toggle for fill tool
+        self.fill_tolerance = 30  # Color tolerance for flood fill (0-255)
+        self.sampling_mode = False  # For sampling colors
+        self.class_colors = {}  # Sampled colors per class: {class_id: (r,g,b)}
 
         # Model
         self.model = None
@@ -226,6 +230,24 @@ class AnnotationHelper:
         btn_eraser = ttk.Button(brush_frame, text="Eraser (E)", command=self.reset_to_prediction)
         btn_eraser.pack(fill='x', pady=5)
 
+        # Fill tool
+        self.fill_btn = ttk.Button(brush_frame, text="Fill Tool (F)", command=self.toggle_fill_mode)
+        self.fill_btn.pack(fill='x', pady=5)
+
+        ttk.Label(brush_frame, text="Fill Tolerance:").pack()
+        self.tolerance_var = tk.IntVar(value=self.fill_tolerance)
+        tolerance_slider = ttk.Scale(
+            brush_frame,
+            from_=5,
+            to=100,
+            orient='horizontal',
+            variable=self.tolerance_var,
+            command=self.on_tolerance_change
+        )
+        tolerance_slider.pack(fill='x', pady=5)
+        self.tolerance_label = ttk.Label(brush_frame, text=f"{self.fill_tolerance}")
+        self.tolerance_label.pack()
+
         ttk.Separator(parent, orient='horizontal').pack(fill='x', pady=10)
 
         # Actions
@@ -237,6 +259,15 @@ class AnnotationHelper:
 
         btn_reset = ttk.Button(action_frame, text="Reset", command=self.reset_mask)
         btn_reset.pack(fill='x', pady=2)
+
+        btn_fill_all = ttk.Button(action_frame, text="Fill All (G)", command=self.fill_all_with_class)
+        btn_fill_all.pack(fill='x', pady=2)
+
+        btn_auto_map = ttk.Button(action_frame, text="Auto Color Map (C)", command=self.auto_color_map)
+        btn_auto_map.pack(fill='x', pady=2)
+
+        btn_sample_color = ttk.Button(action_frame, text="Sample Color (R)", command=self.start_color_sampling)
+        btn_sample_color.pack(fill='x', pady=2)
 
         btn_run_model = ttk.Button(action_frame, text="Run Model", command=self.run_model_prediction)
         btn_run_model.pack(fill='x', pady=2)
@@ -295,6 +326,23 @@ class AnnotationHelper:
         """Handle brush size slider change."""
         self.brush_size = int(float(value))
         self.brush_size_label.config(text=f"{self.brush_size} px")
+
+    def on_tolerance_change(self, value):
+        """Handle fill tolerance slider change."""
+        self.fill_tolerance = int(float(value))
+        self.tolerance_label.config(text=f"{self.fill_tolerance}")
+
+    def toggle_fill_mode(self):
+        """Toggle fill mode on/off."""
+        self.fill_mode = not self.fill_mode
+        if self.fill_mode:
+            self.fill_btn.config(text="Fill Tool (F) [ON]")
+            self.canvas.config(cursor='target')
+            print("Fill mode ON - click to fill similar colors")
+        else:
+            self.fill_btn.config(text="Fill Tool (F)")
+            self.canvas.config(cursor='crosshair')
+            print("Fill mode OFF - brush mode")
 
     def load_tile(self, index: int):
         """Load tile at given index."""
@@ -393,10 +441,15 @@ class AnnotationHelper:
 
     def on_mouse_down(self, event):
         """Handle mouse button press."""
-        self.drawing = True
-        self.last_x = event.x
-        self.last_y = event.y
-        self.draw_at(event.x, event.y)
+        if self.sampling_mode:
+            self.sample_color_at(event.x, event.y)
+        elif self.fill_mode:
+            self.flood_fill(event.x, event.y)
+        else:
+            self.drawing = True
+            self.last_x = event.x
+            self.last_y = event.y
+            self.draw_at(event.x, event.y)
 
     def on_mouse_drag(self, event):
         """Handle mouse drag."""
@@ -453,6 +506,38 @@ class AnnotationHelper:
                 err += dx
                 y += sy
 
+    def flood_fill(self, x: int, y: int):
+        """Flood fill connected pixels of similar color with current class."""
+        if self.current_image is None or self.working_mask is None:
+            return
+
+        h, w = self.working_mask.shape
+        if x < 0 or x >= w or y < 0 or y >= h:
+            return
+
+        # Get the color at click position from original image
+        img_array = np.array(self.current_image)
+        target_color = img_array[y, x].astype(np.int32)
+
+        # Calculate color distance for all pixels
+        color_diff = np.sqrt(np.sum((img_array.astype(np.int32) - target_color) ** 2, axis=2))
+
+        # Create mask of similar colors within tolerance
+        similar_mask = color_diff <= self.fill_tolerance
+
+        # Use flood fill to get connected component
+        from scipy import ndimage
+        labeled, num_features = ndimage.label(similar_mask)
+        connected_region = labeled == labeled[y, x]
+
+        # Apply class to connected region
+        self.working_mask[connected_region] = self.current_class
+
+        pixels_filled = np.sum(connected_region)
+        print(f"Filled {pixels_filled} pixels with {CLASSES[self.current_class]['name']}")
+
+        self.update_display()
+
     def reset_to_prediction(self):
         """Reset current area under brush to original prediction (eraser)."""
         if self.original_mask is not None:
@@ -469,6 +554,81 @@ class AnnotationHelper:
             self.working_mask = np.zeros((h, w), dtype=np.uint8)
         self.update_display()
         print("Reset mask")
+
+    def fill_all_with_class(self):
+        """Fill entire mask with current class."""
+        if self.working_mask is None:
+            return
+        self.working_mask[:] = self.current_class
+        print(f"Filled all with {CLASSES[self.current_class]['name']}")
+        self.update_display()
+
+    def start_color_sampling(self):
+        """Enter color sampling mode - next click samples color for current class."""
+        self.sampling_mode = True
+        self.fill_mode = False
+        self.canvas.config(cursor='plus')
+        print(f"Click on a pixel to sample color for {CLASSES[self.current_class]['name']}")
+
+    def sample_color_at(self, x: int, y: int):
+        """Sample color at position and assign to current class."""
+        if self.current_image is None:
+            return
+
+        h, w = self.current_image.size[1], self.current_image.size[0]
+        if x < 0 or x >= w or y < 0 or y >= h:
+            return
+
+        img_array = np.array(self.current_image)
+        color = tuple(img_array[y, x])
+        self.class_colors[self.current_class] = color
+
+        print(f"Sampled RGB{color} for {CLASSES[self.current_class]['name']}")
+        print(f"Current mappings: {self.get_color_mapping_str()}")
+
+        self.sampling_mode = False
+        self.canvas.config(cursor='crosshair')
+
+    def get_color_mapping_str(self):
+        """Get string representation of current color mappings."""
+        parts = []
+        for cid, color in self.class_colors.items():
+            parts.append(f"{CLASSES[cid]['name']}=RGB{color}")
+        return ", ".join(parts) if parts else "none"
+
+    def auto_color_map(self):
+        """Auto-segment entire image based on sampled colors."""
+        if self.current_image is None or self.working_mask is None:
+            return
+
+        if not self.class_colors:
+            print("No colors sampled! Use 'Sample Color (R)' first:")
+            print("  1. Select class (1-5)")
+            print("  2. Press R, click on that color in image")
+            print("  3. Repeat for each class")
+            print("  4. Press C to auto-map")
+            return
+
+        img_array = np.array(self.current_image).astype(np.int32)
+        h, w = img_array.shape[:2]
+
+        # Start with background
+        self.working_mask[:] = 0
+
+        # For each pixel, find closest sampled color
+        best_dist = np.full((h, w), 999999.0)
+
+        for class_id, color in self.class_colors.items():
+            color_array = np.array(color, dtype=np.int32)
+            dist = np.sqrt(np.sum((img_array - color_array) ** 2, axis=2))
+
+            # Update mask where this color is closer AND within tolerance
+            mask = (dist < best_dist) & (dist <= self.fill_tolerance)
+            self.working_mask[mask] = class_id
+            best_dist = np.minimum(best_dist, dist)
+
+        print(f"Auto-mapped using tolerance {self.fill_tolerance}")
+        self.update_display()
 
     def save_annotation(self):
         """Save current annotation."""
@@ -560,6 +720,14 @@ class AnnotationHelper:
             self.save_annotation()
         elif key == 'e':
             self.reset_to_prediction()
+        elif key == 'f':
+            self.toggle_fill_mode()
+        elif key == 'g':
+            self.fill_all_with_class()
+        elif key == 'r':
+            self.start_color_sampling()
+        elif key == 'c':
+            self.auto_color_map()
         elif key == 'm':
             self.show_mask_var.set(not self.show_mask_var.get())
             self.update_display()

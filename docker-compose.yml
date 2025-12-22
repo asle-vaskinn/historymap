@@ -1,4 +1,21 @@
 services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: historymap-backend
+    volumes:
+      - ./data:/app/data
+      - ./ml:/app/ml
+      - ./models:/app/models
+      - ./scripts:/app/scripts
+      - ./backend:/app/backend
+    environment:
+      - PYTHONPATH=/app
+    expose:
+      - "5000"
+    restart: unless-stopped
+
   web:
     image: nginx:alpine
     container_name: historymap-web
@@ -12,3 +29,5 @@ services:
     environment:
       - NGINX_HOST=localhost
       - NGINX_PORT=80
+    depends_on:
+      - backend
