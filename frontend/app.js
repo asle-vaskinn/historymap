@@ -38,8 +38,8 @@ let animationFrameId = null;
 let isAnimating = false;
 let layerVisibility = {
     buildings: true,
-    roads: true,
-    roadsHistorical: true,  // ML-detected historical roads
+    roads: false,           // OSM modern roads (hidden - use historical instead)
+    roadsHistorical: true,  // Historical roads with timeline filtering
     water: true,
     confidenceOverlay: false
 };
@@ -489,7 +489,7 @@ function createMapStyle(year) {
                 id: 'roads-historical-removed',
                 type: 'line',
                 source: 'roads-temporal',
-                filter: ['all', createRoadFilter(year), ['==', ['get', 'ct'], 'removed']],
+                filter: ['all', createRoadFilter(year), ['==', 'ct', 'removed']],
                 layout: {
                     'visibility': layerVisibility.roadsHistorical ? 'visible' : 'none',
                     'line-cap': 'round',
@@ -513,7 +513,7 @@ function createMapStyle(year) {
                 id: 'roads-historical',
                 type: 'line',
                 source: 'roads-temporal',
-                filter: ['all', createRoadFilter(year), ['!=', ['get', 'ct'], 'removed']],
+                filter: ['all', createRoadFilter(year), ['!=', 'ct', 'removed']],
                 layout: {
                     'visibility': layerVisibility.roadsHistorical ? 'visible' : 'none',
                     'line-cap': 'round',
@@ -663,10 +663,10 @@ function createMapStyle(year) {
                 source: 'finn-buildings',
                 filter: [
                     'all',
-                    ['<=', ['get', 'sd'], year],
+                    ['<=', 'sd', year],
                     ['any',
-                        ['!', ['has', 'ed']],
-                        ['>=', ['get', 'ed'], year]
+                        ['!has', 'ed'],
+                        ['>=', 'ed', year]
                     ]
                 ],
                 layout: {
@@ -799,7 +799,7 @@ function createMlSourceFilter() {
     return [
         'any',
         ['!=', ['get', 'src'], 'ml'],
-        ['!', ['has', 'ml_src']],
+        ['!has', 'ml_src'],
         matchArgs
     ];
 }
@@ -903,7 +903,7 @@ function createRoadSourceFilter() {
 
     if (enabledSources.length === 0) {
         // No sources enabled - show nothing
-        return ['==', ['get', 'src'], '__none__'];
+        return ['==', 'src', '__none__'];
     }
 
     if (enabledSources.length === Object.keys(roadSourceFilter).length) {
@@ -916,17 +916,17 @@ function createRoadSourceFilter() {
 
     // NVDB roads (src = 'nvdb')
     if (roadSourceFilter.nvdb) {
-        conditions.push(['==', ['get', 'src'], 'nvdb']);
+        conditions.push(['==', 'src', 'nvdb']);
     }
 
     // Kulturminnesøk roads (src = 'kult')
     if (roadSourceFilter.kult) {
-        conditions.push(['==', ['get', 'src'], 'kult']);
+        conditions.push(['==', 'src', 'kult']);
     }
 
     // OSM roads (src = 'osm')
     if (roadSourceFilter.osm) {
-        conditions.push(['==', ['get', 'src'], 'osm']);
+        conditions.push(['==', 'src', 'osm']);
     }
 
     // ML roads - check individual map sources
@@ -937,22 +937,16 @@ function createRoadSourceFilter() {
 
     if (mlSources.length > 0) {
         // ML roads have src='ml' and ml_src specifies the map
-        // Use 'match' instead of 'in' + 'literal' for MapLibre compatibility
-        const mlMatchArgs = ['match', ['get', 'ml_src']];
-        mlSources.forEach(src => {
-            mlMatchArgs.push(src, true);
-        });
-        mlMatchArgs.push(false);  // default
-
+        // Use 'in' with array for legacy filter syntax
         conditions.push([
             'all',
-            ['==', ['get', 'src'], 'ml'],
-            mlMatchArgs
+            ['==', 'src', 'ml'],
+            ['in', 'ml_src', ...mlSources]
         ]);
     }
 
     if (conditions.length === 0) {
-        return ['==', ['get', 'src'], '__none__'];
+        return ['==', 'src', '__none__'];
     }
 
     if (conditions.length === 1) {
@@ -973,7 +967,7 @@ function createRoadTypeFilter() {
         .map(([type, _]) => type);
 
     if (enabledTypes.length === 0) {
-        return ['==', ['get', 'rt'], '__none__'];
+        return ['==', 'rt', '__none__'];
     }
 
     if (enabledTypes.length === Object.keys(roadTypeFilter).length) {
@@ -981,13 +975,8 @@ function createRoadTypeFilter() {
         return null;
     }
 
-    // Use 'match' instead of 'in' + 'literal' for MapLibre compatibility
-    const matchArgs = ['match', ['get', 'rt']];
-    enabledTypes.forEach(type => {
-        matchArgs.push(type, true);
-    });
-    matchArgs.push(false);  // default
-    return matchArgs;
+    // Use 'in' for legacy filter syntax
+    return ['in', 'rt', ...enabledTypes];
 }
 
 /**
@@ -1005,12 +994,12 @@ function createRoadDateRangeFilter() {
     return [
         'any',
         // Roads without dates (modern/unknown) - always show
-        ['==', ['has', 'sd'], false],
+        ['!has', 'sd'],
         // Roads with dates in range
         [
             'all',
-            ['>=', ['get', 'sd'], roadDateRange.from],
-            ['<=', ['get', 'sd'], roadDateRange.to]
+            ['>=', 'sd', roadDateRange.from],
+            ['<=', 'sd', roadDateRange.to]
         ]
     ];
 }
@@ -1027,24 +1016,34 @@ function createRoadDateRangeFilter() {
  * @returns {array} MapLibre filter expression
  */
 function createRoadFilter(year) {
-    // Build temporal filter (sd <= year AND (ed is null OR ed > year))
-    // Note: Removed roads should hide when ed <= year
-    const temporalFilter = [
+    // Fallback year for roads without dates (similar to buildings)
+    const ROAD_FALLBACK_YEAR = 2000;
+
+    // Build temporal filter with fallback for undated roads
+    // Roads WITH sd: show if sd <= year AND (no ed OR ed > year)
+    // Roads WITHOUT sd: show only if year >= ROAD_FALLBACK_YEAR
+    const hasDateFilter = [
         'all',
-        // start_date <= year OR no start_date (show modern roads)
-        [
-            'any',
-            ['==', ['has', 'sd'], false],
-            ['<=', ['get', 'sd'], year]
-        ],
+        ['has', 'sd'],
+        ['<=', 'sd', year],
         // end_date > year OR no end_date (road still exists at this year)
         // Changed from >= to > so roads hide in the year they were removed
         [
             'any',
-            ['==', ['has', 'ed'], false],
-            ['>', ['get', 'ed'], year]
+            ['!has', 'ed'],
+            ['>', 'ed', year]
         ]
     ];
+
+    // Build temporal filter - include undated roads only if year >= fallback
+    let temporalFilter;
+    if (year >= ROAD_FALLBACK_YEAR) {
+        // Show roads with dates OR roads without dates
+        temporalFilter = ['any', hasDateFilter, ['!has', 'sd']];
+    } else {
+        // Only show roads with dates in range
+        temporalFilter = hasDateFilter;
+    }
 
     // Build source filter
     const srcFilter = createRoadSourceFilter();
@@ -1064,20 +1063,20 @@ function createRoadFilter(year) {
         // 1900-1950: show if has evidence with sd <= year, or modern (no date)
         eraFilter = [
             'any',
-            ['==', ['has', 'sd'], false],
+            ['!has', 'sd'],
             [
                 'all',
-                ['any', ['==', ['get', 'ev'], 'h'], ['==', ['get', 'ev'], 'm']],
-                ['<=', ['get', 'sd'], year]
+                ['any', ['==', 'ev', 'h'], ['==', 'ev', 'm']],
+                ['<=', 'sd', year]
             ]
         ];
     } else {
         // Pre-1900: only show with high evidence AND sd <= year
         eraFilter = [
             'all',
-            ['==', ['get', 'ev'], 'h'],
+            ['==', 'ev', 'h'],
             ['has', 'sd'],
-            ['<=', ['get', 'sd'], year]
+            ['<=', 'sd', year]
         ];
     }
 
@@ -1391,9 +1390,9 @@ function updateLayerFilters(year) {
         if (map.getLayer(layerId)) {
             // For removed roads, combine base filter with ct='removed' check
             if (layerId === 'roads-historical-removed') {
-                map.setFilter(layerId, ['all', roadFilter, ['==', ['get', 'ct'], 'removed']]);
+                map.setFilter(layerId, ['all', roadFilter, ['==', 'ct', 'removed']]);
             } else if (layerId === 'roads-historical') {
-                map.setFilter(layerId, ['all', roadFilter, ['!=', ['get', 'ct'], 'removed']]);
+                map.setFilter(layerId, ['all', roadFilter, ['!=', 'ct', 'removed']]);
             } else {
                 map.setFilter(layerId, roadFilter);
             }

@@ -6,23 +6,28 @@ Key insight: Local roads are typically built 1-2 years before the houses they se
 
 Algorithm:
 1. Load roads GeoJSON and buildings GeoJSON
-2. For each road segment without a date (sd):
+2. For each road segment:
    a. Find all buildings within buffer distance (default 50m)
    b. Get construction dates (sd) from those buildings
    c. Take the EARLIEST (minimum) building date
    d. Subtract offset (default 2 years) for road construction estimate
-3. If no nearby buildings, fallback to map era if src='ml':
+3. Apply priority logic:
+   - If road has ML date with ev='h', keep it
+   - If road has ML date with ev='m' and building suggests earlier, use building date
+   - If road has no date, use building date or fallback to 2000
+4. If no nearby buildings, fallback to map era if src='ml':
    - 'kv1880' -> 1880
    - 'kv1904' -> 1904
    - 'air1947' -> 1947
-4. Ultimate fallback: 1960
+5. Ultimate fallback: 2000
 
 Output properties to add:
 - sd: inferred start date
 - ev: 'l' (low evidence for inferred)
-- sd_method: 'building' | 'bounded' | 'fallback'
+- sd_method: 'building' | 'building_override' | 'fallback'
 - sd_buildings: count of buildings used
 - sd_offset: years subtracted (typically -2)
+- sd_inherited: True (for inferred dates)
 """
 
 import json
@@ -39,6 +44,17 @@ except ImportError:
     print("ERROR: shapely is required for spatial operations")
     print("Install with: pip install shapely")
     sys.exit(1)
+
+# Import constants
+try:
+    from scripts.constants import ROAD_BUFFER_M, ROAD_BUILDING_OFFSET, ROAD_FALLBACK_YEAR
+    ROAD_OFFSET_YEARS = ROAD_BUILDING_OFFSET  # Alias for internal use
+except ImportError:
+    # Fallback to default values if constants not available
+    ROAD_BUFFER_M = 50
+    ROAD_BUILDING_OFFSET = 2
+    ROAD_OFFSET_YEARS = 2
+    ROAD_FALLBACK_YEAR = 2000
 
 
 def extract_map_year(src: str) -> Optional[int]:
@@ -178,8 +194,8 @@ def infer_road_dates(
     roads_path: Path,
     buildings_path: Path,
     output_path: Path,
-    buffer_m: float = 50,
-    offset_years: int = 2
+    buffer_m: float = None,
+    offset_years: int = None
 ):
     """
     Infer road construction dates from nearby buildings.
@@ -188,9 +204,15 @@ def infer_road_dates(
         roads_path: Input roads GeoJSON
         buildings_path: Buildings GeoJSON with dates
         output_path: Output roads GeoJSON with dates
-        buffer_m: Search radius in meters (default 50)
-        offset_years: Years to subtract from building date (default 2)
+        buffer_m: Search radius in meters (default from constants)
+        offset_years: Years to subtract from building date (default from constants)
     """
+    # Use constants if not provided
+    if buffer_m is None:
+        buffer_m = ROAD_BUFFER_M
+    if offset_years is None:
+        offset_years = ROAD_OFFSET_YEARS
+
     print(f"Loading roads from {roads_path}...")
     roads_data = load_geojson(roads_path)
     roads = roads_data.get('features', [])
@@ -220,7 +242,8 @@ def infer_road_dates(
     # Statistics
     stats = {
         'total_roads': len(roads),
-        'already_dated': 0,
+        'kept_high_evidence': 0,
+        'overridden_medium_evidence': 0,
         'dated_by_building': 0,
         'dated_by_map_era': 0,
         'dated_by_fallback': 0,
@@ -231,36 +254,68 @@ def infer_road_dates(
 
     for road in roads:
         props = road.get('properties', {})
-
-        # Skip if already has a date
-        if props.get('sd'):
-            stats['already_dated'] += 1
-            continue
-
         geom = road.get('geometry')
+
         if not geom:
             stats['no_date'] += 1
             continue
 
+        # Get existing date and evidence
+        existing_sd = props.get('sd')
+        existing_ev = props.get('ev', '')
+
         # Find nearby buildings
         nearby_buildings = find_nearby_buildings(geom, building_index, buffer_m)
+        earliest_date = None
 
         if nearby_buildings:
-            # Get earliest building date
             earliest_date = get_earliest_building_date(nearby_buildings)
 
-            if earliest_date:
-                # Infer road date by subtracting offset
-                inferred_date = earliest_date - offset_years
+        # Priority logic
+        if existing_sd and existing_ev == 'h':
+            # Keep high-evidence ML dates
+            stats['kept_high_evidence'] += 1
+            continue
 
+        elif existing_sd and existing_ev == 'm' and earliest_date:
+            # Check if building suggests earlier date
+            inferred_date = earliest_date - offset_years
+
+            if inferred_date < existing_sd:
+                # Override with earlier building-based date
                 props['sd'] = inferred_date
-                props['ev'] = 'l'  # Low evidence
-                props['sd_method'] = 'building'
+                props['ev'] = 'l'
+                props['sd_method'] = 'building_override'
                 props['sd_buildings'] = len(nearby_buildings)
                 props['sd_offset'] = -offset_years
+                props['sd_inherited'] = True
 
-                stats['dated_by_building'] += 1
+                stats['overridden_medium_evidence'] += 1
                 continue
+            else:
+                # Keep existing medium-evidence date
+                stats['kept_high_evidence'] += 1
+                continue
+
+        elif earliest_date:
+            # No date or low-evidence date: use building inference
+            inferred_date = earliest_date - offset_years
+
+            props['sd'] = inferred_date
+            props['ev'] = 'l'
+            props['sd_method'] = 'building'
+            props['sd_buildings'] = len(nearby_buildings)
+            props['sd_offset'] = -offset_years
+            props['sd_inherited'] = True
+
+            stats['dated_by_building'] += 1
+            continue
+
+        # No building-based inference available
+        if existing_sd:
+            # Keep existing date (likely low evidence or no evidence)
+            stats['kept_high_evidence'] += 1
+            continue
 
         # Fallback 1: Use map era if ML source
         src = props.get('src', '')
@@ -271,15 +326,17 @@ def infer_road_dates(
                 props['ev'] = 'l'
                 props['sd_method'] = 'bounded'
                 props['sd_offset'] = 0
+                props['sd_inherited'] = True
 
                 stats['dated_by_map_era'] += 1
                 continue
 
-        # Fallback 2: Default to 1960
-        props['sd'] = 1960
+        # Fallback 2: Default to ROAD_FALLBACK_YEAR
+        props['sd'] = ROAD_FALLBACK_YEAR
         props['ev'] = 'l'
         props['sd_method'] = 'fallback'
         props['sd_offset'] = 0
+        props['sd_inherited'] = True
 
         stats['dated_by_fallback'] += 1
 
@@ -294,21 +351,26 @@ def infer_road_dates(
         json.dump(output_data, f)
 
     # Print statistics
-    print("\n" + "=" * 60)
+    print("\n" + "=" * 70)
     print("ROAD DATE INFERENCE STATISTICS")
-    print("=" * 60)
-    print(f"Total roads:               {stats['total_roads']:>6}")
-    print(f"Already dated:             {stats['already_dated']:>6} ({100*stats['already_dated']/stats['total_roads']:.1f}%)")
-    print(f"Dated by building:         {stats['dated_by_building']:>6} ({100*stats['dated_by_building']/stats['total_roads']:.1f}%)")
-    print(f"Dated by map era:          {stats['dated_by_map_era']:>6} ({100*stats['dated_by_map_era']/stats['total_roads']:.1f}%)")
-    print(f"Dated by fallback (1960):  {stats['dated_by_fallback']:>6} ({100*stats['dated_by_fallback']/stats['total_roads']:.1f}%)")
-    print(f"No date:                   {stats['no_date']:>6} ({100*stats['no_date']/stats['total_roads']:.1f}%)")
-    print("=" * 60)
+    print("=" * 70)
+    print(f"Total roads:                        {stats['total_roads']:>6}")
+    print(f"Kept (high evidence ML):            {stats['kept_high_evidence']:>6} ({100*stats['kept_high_evidence']/stats['total_roads']:.1f}%)")
+    print(f"Overridden (medium -> building):    {stats['overridden_medium_evidence']:>6} ({100*stats['overridden_medium_evidence']/stats['total_roads']:.1f}%)")
+    print(f"Dated by building (new):            {stats['dated_by_building']:>6} ({100*stats['dated_by_building']/stats['total_roads']:.1f}%)")
+    print(f"Dated by map era:                   {stats['dated_by_map_era']:>6} ({100*stats['dated_by_map_era']/stats['total_roads']:.1f}%)")
+    print(f"Dated by fallback ({ROAD_FALLBACK_YEAR}):           {stats['dated_by_fallback']:>6} ({100*stats['dated_by_fallback']/stats['total_roads']:.1f}%)")
+    print(f"No date (no geometry):              {stats['no_date']:>6} ({100*stats['no_date']/stats['total_roads']:.1f}%)")
+    print("=" * 70)
 
     # Calculate total with dates
-    total_dated = (stats['already_dated'] + stats['dated_by_building'] +
-                   stats['dated_by_map_era'] + stats['dated_by_fallback'])
-    print(f"\nTotal roads with dates:    {total_dated:>6} ({100*total_dated/stats['total_roads']:.1f}%)")
+    total_dated = (stats['kept_high_evidence'] + stats['overridden_medium_evidence'] +
+                   stats['dated_by_building'] + stats['dated_by_map_era'] +
+                   stats['dated_by_fallback'])
+    total_inferred = (stats['overridden_medium_evidence'] + stats['dated_by_building'] +
+                      stats['dated_by_map_era'] + stats['dated_by_fallback'])
+    print(f"\nTotal roads with dates:             {total_dated:>6} ({100*total_dated/stats['total_roads']:.1f}%)")
+    print(f"Total inferred dates:               {total_inferred:>6} ({100*total_inferred/stats['total_roads']:.1f}%)")
     print(f"\nOutput written to: {output_path}")
 
 
@@ -321,40 +383,52 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Basic usage
+  # Basic usage (uses constants from scripts/constants.py)
   python infer_road_dates.py \\
     --roads data/roads_temporal.geojson \\
-    --buildings data/buildings_temporal.geojson \\
+    --buildings data/merged/buildings_merged.geojson \\
     --output data/roads_dated.geojson
 
   # Custom parameters
   python infer_road_dates.py \\
     --roads data/roads_temporal.geojson \\
-    --buildings data/buildings_temporal.geojson \\
+    --buildings data/merged/buildings_merged.geojson \\
     --output data/roads_dated.geojson \\
     --buffer 75 \\
     --offset 3
 
 Algorithm:
-  1. For each road without a date (sd):
-     a. Find buildings within buffer distance (default 50m)
+  1. For each road:
+     a. Find buildings within buffer distance (default: ROAD_BUFFER_M = 50m)
      b. Take EARLIEST building construction date
-     c. Subtract offset years (default 2) for road date
-  2. If no nearby buildings, use map era if ML source
-  3. Ultimate fallback: 1960
+     c. Subtract offset years (default: ROAD_OFFSET_YEARS = 2) for road date
+  2. Priority logic:
+     - Keep roads with ML date and ev='h' (high evidence)
+     - Override roads with ML date and ev='m' if building suggests earlier
+     - Add dates to roads without dates using building inference
+  3. If no nearby buildings, use map era if ML source (e.g., kv1880 -> 1880)
+  4. Ultimate fallback: ROAD_FALLBACK_YEAR = 2000
+
+Output properties:
+  - sd: inferred start date
+  - ev: 'l' (low evidence for all inferred dates)
+  - sd_method: 'building' | 'building_override' | 'bounded' | 'fallback'
+  - sd_buildings: count of buildings used for inference
+  - sd_offset: years subtracted (typically -2)
+  - sd_inherited: True (marks dates as inferred)
         """
     )
 
     parser.add_argument('--roads', type=Path, required=True,
                         help='Input roads GeoJSON')
     parser.add_argument('--buildings', type=Path, required=True,
-                        help='Buildings GeoJSON with dates')
+                        help='Buildings GeoJSON with dates (e.g., buildings_merged.geojson)')
     parser.add_argument('--output', type=Path, required=True,
                         help='Output roads GeoJSON with dates')
-    parser.add_argument('--buffer', type=float, default=50,
-                        help='Search radius in meters (default: 50)')
-    parser.add_argument('--offset', type=int, default=2,
-                        help='Years to subtract from building date (default: 2)')
+    parser.add_argument('--buffer', type=float, default=None,
+                        help=f'Search radius in meters (default: {ROAD_BUFFER_M}m from constants)')
+    parser.add_argument('--offset', type=int, default=None,
+                        help=f'Years to subtract from building date (default: {ROAD_OFFSET_YEARS}y from constants)')
 
     args = parser.parse_args()
 

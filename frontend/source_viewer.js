@@ -35,7 +35,7 @@ const SOURCES = {
     ortofoto1937: {
         name: 'Flyfoto 1937',
         year: 1937,
-        bounds: [10.38, 63.42, 10.44, 63.44],  // Training area bounds
+        bounds: [10.38, 63.42, 10.44, 63.45],  // Extended bounds
         raster: {
             type: 'wms',
             url: 'https://kart.trondheim.kommune.no/geoserver/Raster/wms',
@@ -43,6 +43,7 @@ const SOURCES = {
             attribution: '© Trondheim kommune'
         },
         buildings: 'data/sources/ml_detected/ortofoto1937/verified_buildings.geojson',
+        roads: 'data/sources/ml_detected/ortofoto1937/roads_extracted.geojson',  // Color-extracted roads
         verificationMode: true  // Use status-based coloring
     },
     ortofoto2006: {
@@ -480,11 +481,13 @@ function addRasterLayers(source) {
     }
 
     if (source.raster.type === 'wms') {
-        // WMS tile source - georeferenced historical maps from Kartverket
+        // WMS tile source - georeferenced historical maps
+        // Use WMS 1.1.1 with EPSG:4326 to match training data download
+        // This ensures ML predictions align with the WMS display
         const bounds = source.bounds;  // [west, south, east, north]
-        const wmsUrl = `${source.raster.url}?service=WMS&version=1.3.0&request=GetMap` +
+        const wmsUrl = `${source.raster.url}?service=WMS&version=1.1.1&request=GetMap` +
             `&layers=${source.raster.layers}&styles=&format=image/png` +
-            `&crs=EPSG:3857&width=512&height=512&bbox={bbox-epsg-3857}`;
+            `&srs=EPSG:4326&width=512&height=512&bbox={bbox-epsg-4326}`;
 
         console.log('Adding WMS source:', source.raster.layers);
         console.log('WMS URL template:', wmsUrl);

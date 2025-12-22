@@ -59,11 +59,11 @@ data:
   pin_memory: true
 
 paths:
-  data_dir: ../data/training_1937
-  checkpoint_dir: ../models/checkpoints_1937
-  log_dir: ../results/training_logs_1937
-  best_model: ../models/checkpoints_1937/best_model_1937.pth
-  last_checkpoint: ../models/checkpoints_1937/last_checkpoint.pth
+  data_dir: data/training_1937
+  checkpoint_dir: models/checkpoints_1937
+  log_dir: results/training_logs_1937
+  best_model: models/checkpoints_1937/best_model_1937.pth
+  last_checkpoint: models/checkpoints_1937/last_checkpoint.pth
 
 logging:
   console_level: INFO

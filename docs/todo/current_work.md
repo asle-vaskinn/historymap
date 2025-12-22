@@ -1,151 +1,103 @@
-# Current Work: Building Replacement Detection + Architecture Cleanup
+# Current Work: Road Fallback Layer System
 
-## Status: APPROVED
+## Status: IMPLEMENTED
 ## Date: 2025-12-22
 
 ## Summary
 
-Implement building replacement detection to identify demolished buildings and inherit demolition dates from their replacements. Most historical demolitions in Trondheim were replacements - old building demolished, new building constructed on same site. Also includes architecture cleanup to consolidate scattered magic numbers and make code actually read from config.
+Add a multi-layer road fallback system aligned with building fallback. Roads get dates from multiple sources with confidence-based merging: ML detection (medium/high evidence) takes precedence, building-based inference (low evidence) fills gaps, and year 2000 is the final fallback.
 
-## Key Insight
+## Date Priority Logic
 
-```
-Building A (1880 map) overlaps Building B (modern OSM)
-Building B's sd = 1950 (from SEFRAK or estimation)
-→ Building A's ed = 1950 (inherited from replacement)
-```
+| Scenario | Result |
+|----------|--------|
+| ML: detected in 1880, Buildings: earliest 1920 | `sd=1880, ev=m` (ML wins) |
+| ML: NOT in 1880, detected in 1904, Buildings: earliest 1870 | `sd=1868, ev=l` (building wins) |
+| ML: none, Buildings: earliest 1950 | `sd=1948, ev=l` (building - 2 years) |
+| ML: none, Buildings: none | `sd=2000, ev=l, sd_method=fallback` |
 
-SEFRAK provides 289 buildings with `status=0` (demolished) but NO demolition dates. These dates must be inherited from replacement buildings.
+## Key Rules
 
-## Decisions
+1. **Buffer distance**: 50m from road centerline
+2. **Building selection**: Earliest building date within buffer
+3. **Offset**: Subtract 2 years (roads built before houses)
+4. **Evidence**: Building-inferred dates get `ev='l'` (low)
+5. **Override**: Building date can override ML only if ML evidence isn't 'h'
 
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| Matching method | Centroid containment | Handles rebuilt larger/smaller/shifted |
-| SEFRAK demolished | Flag only, dates from replacements | SEFRAK has no demolition dates |
-| Date inheritance | `old.ed = new.sd` | Replacement's construction = demolition |
-| Architecture | Constants file + read config | Fix 5+ hardcoded `1960` values |
+## Properties Added to Roads
 
-## Schema Additions
-
-```python
-# Existing fields (already in DATA_SCHEMA.md)
-ed          # End date (demolition year)
-ed_t        # 'x' exact, 's' estimated
-ed_s        # 'sef' (SEFRAK), 'repl' (from replacement), 'map' (ML)
-
-# New fields
-demolished  # boolean - known to be demolished (from SEFRAK status=0)
-repl_by     # ID of building that replaced this one
-repl_of     # ID of building this replaced
-```
+| Field | Type | Description |
+|-------|------|-------------|
+| `sd_method` | string | 'ml', 'building', 'building_override', 'fallback' |
+| `sd_buildings` | int | Number of buildings used for inference |
+| `sd_offset` | int | Years subtracted (typically -2) |
+| `sd_inherited` | bool | True if date came from buildings |
 
 ## Tasks
 
-### Phase 1: Architecture Cleanup
+### Phase 1: Constants & Schema
 
-- [ ] Create `scripts/constants.py` with centralized magic numbers:
-  - DATE_FALLBACK = 1960
-  - MEDIAN_RADIUS_M = 2000
-  - ML_CONFIDENCE_HIGH = 0.9
-  - ML_CONFIDENCE_MEDIUM = 0.7
-  - ERA_BOUNDS = [1900, 1950]
-- [ ] Update `merge_sources.py` to read `fallback_year` from config (currently ignored)
-- [ ] Extract `determine_era(year)` function (duplicated at lines 879-884, 944-949)
-- [ ] Extract `check_evidence_threshold(ev, min_ev)` function
-- [ ] Create `scripts/normalize/date_utils.py` for shared date parsing
+- [x] Add constants to `scripts/constants.py`:
+  - `ROAD_FALLBACK_YEAR = 2000`
+  - `ROAD_BUILDING_OFFSET = 2`
+  - `ROAD_BUFFER_M = 50`
 
-### Phase 2: SEFRAK Demolished Integration
+- [x] Update `docs/tech/DATA_SCHEMA.md` with road fallback documentation
 
-- [ ] Update `normalize_sefrak.py` to set `demolished=true` for status=0
-- [ ] Ensure SEFRAK demolished buildings flow through merge pipeline
-- [ ] Add SEFRAK demolished to candidate list for date inheritance
+### Phase 2: Backend - Date Inference
 
-### Phase 3: Replacement Detection Enhancement
+- [x] Update `scripts/merge/infer_road_dates.py`:
+  - Load buildings with dates
+  - For each road, find buildings within 50m buffer
+  - Get earliest building `sd`, subtract 2 years
+  - Apply priority logic (ML vs building)
+  - Set `sd_method`, `sd_buildings`, `sd_offset`, `sd_inherited`
 
-- [ ] Implement centroid-containment matching:
-  - New building centroid inside old footprint → same location
-  - OR old building centroid inside new footprint → same location
-  - Overlap ratio >30% confirms replacement vs adjacent
-- [ ] Inherit `ed` from replacement's `sd` for demolished buildings
-- [ ] Track replacement chain: `repl_by`, `repl_of` fields
-- [ ] Update quality report with replacement statistics
+### Phase 3: Frontend - Filter Update
 
-## Date Inference Rules
+- [x] Update `frontend/app.js` `createRoadFilter(year)`:
+  - Roads without `sd` shown only when `year >= 2000`
+  - Match building filter pattern
 
-| Scenario | Old Building `ed` | Evidence |
-|----------|-------------------|----------|
-| SEFRAK has demolition date | SEFRAK date | `h` (high) |
-| Overlaps modern building with known `sd` | Modern building's `sd` | `m` (medium) |
-| Overlaps modern building, `sd` estimated | Modern building's estimated `sd` | `l` (low) |
-| No overlap (truly removed, rare) | Map where last seen + buffer | `l` (low) |
+### Phase 4: Pipeline Re-run
+
+- [x] Re-run road merge pipeline with new inference
+- [x] Verify output in `roads_temporal.geojson`
+- [ ] Test in frontend with timeline slider
 
 ## Files to Modify
 
 | File | Changes |
 |------|---------|
-| `scripts/constants.py` | NEW - centralized magic numbers |
-| `scripts/normalize/date_utils.py` | NEW - shared date parsing |
-| `scripts/normalize/normalize_sefrak.py` | Add demolished flag |
-| `scripts/merge/merge_sources.py` | Read config, extract functions, centroid matching |
-| `scripts/merge/merge_config.json` | Add date_inference section |
-| `docs/tech/DATA_SCHEMA.md` | Document new fields |
-
-## Architecture Issues to Fix
-
-| Issue | File:Line | Fix |
-|-------|-----------|-----|
-| `1960` hardcoded 5+ times | merge_sources.py:431,465,523 | Use constants.DATE_FALLBACK |
-| Config `fallback_year` ignored | merge_sources.py | Read from osm_centric config |
-| Duplicate era logic | merge_sources.py:879-884,944-949 | Extract to function |
-| ML thresholds hardcoded | normalize_ml.py:76-78 | Use constants |
-| Date parsing duplicated | normalize_*.py | Use date_utils.py |
-
-## Expected Yield
-
-| Source | Demolished Buildings | With Dates |
-|--------|---------------------|------------|
-| SEFRAK status=0 | 289 | 0 → ~200 (via replacement) |
-| ML 1880 absent in modern | ~100-500 | ~80% (via replacement) |
-| **Total** | **~400-800** | **~300-600** |
+| `scripts/constants.py` | Add ROAD_FALLBACK_YEAR, ROAD_BUILDING_OFFSET, ROAD_BUFFER_M |
+| `scripts/merge/infer_road_dates.py` | Building-based date inference logic |
+| `frontend/app.js` | Update createRoadFilter() with 2000 fallback |
+| `docs/tech/DATA_SCHEMA.md` | Document road fallback logic |
 
 ## Success Criteria
 
-- [ ] `scripts/constants.py` exists with all magic numbers
-- [ ] `merge_sources.py` reads `fallback_year` from config
-- [ ] No duplicate era determination logic
-- [ ] SEFRAK demolished buildings have `demolished=true`
-- [ ] Replacement detection finds overlapping buildings
-- [ ] Demolished buildings inherit `ed` from replacements
-- [ ] `repl_by`/`repl_of` fields track replacement chains
-- [ ] Quality report shows replacement statistics
+- [x] Roads without dates hidden before year 2000
+- [x] Roads near old buildings get earlier dates (building.sd - 2)
+- [x] ML-detected roads keep their dates unless building contradicts
+- [x] `sd_method` field tracks how date was determined
+- [ ] Frontend timeline correctly filters roads (needs manual verification)
 
 ---
 
 ## Archive
 
-### Year Step Buttons (2025-12-22) - APPROVED (pending)
+### Water Diff-Comparison Workflow (2025-12-22) - ON HOLD
 
-Add forward/back step buttons (◀ ▶) next to the play button to allow single-year navigation.
+Enhance water editor with diff-comparison mode. See previous version for details.
+
+### Building Replacement Detection (2025-12-22) - IMPLEMENTED
+
+Centroid-containment matching, `repl_by`/`repl_of` tracking, `demolished` flag.
 
 ### Road Temporal Network (2025-12-22) - IMPLEMENTED
 
-Segment-based road tracking with LSS-Hausdorff matching and building-based date inference.
-See `scripts/extract/extract_roads.py`, `scripts/merge/match_roads.py`, `scripts/merge/infer_road_dates.py`.
+LSS-Hausdorff matching, building-based date inference.
 
-### UI Reorganization + Manual Edit Mode (2025-12-22) - IMPLEMENTED
+### Year Step Buttons (2025-12-22) - IMPLEMENTED
 
-Reorganized toggle buttons to Background/Debug/Edit. Added Edit mode for manually setting building construction/demolition dates.
-
-### Semi-Manual FINN Data Entry (2025-12-22) - IMPLEMENTED
-
-CLI script for adding FINN listings manually. See `scripts/ingest/finn_manual.py`.
-
-### Multi-Layer Date Inheritance (2025-12-22) - IMPLEMENTED
-
-Three-tier building date fallback: median within 2km → nearest any distance → 1960.
-See `scripts/merge/merge_sources.py:inherit_dates_from_neighbors()`
-
-### OSM-Centric Building Model (2025-12-20) - IMPLEMENTED
-
-OSM buildings as canonical geometry, dates attached from SEFRAK/FINN/MANUAL.
+Timeline navigation with ◀ ▶ buttons.

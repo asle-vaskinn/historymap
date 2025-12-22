@@ -15,6 +15,10 @@ NEAREST_K_DONORS = 3  # Number of nearest donors to use for median date calculat
 ROAD_BUFFER_M = 50  # Buffer for road-to-building proximity
 ROAD_OFFSET_YEARS = 2  # Years to subtract from building date for road inference
 
+# Road date inference fallbacks
+ROAD_FALLBACK_YEAR = 2000  # Final fallback year for roads without dates
+ROAD_BUILDING_OFFSET = 2  # Years to subtract from earliest building date
+
 # ML confidence thresholds
 ML_CONFIDENCE_HIGH = 0.9  # Threshold for high evidence
 ML_CONFIDENCE_MEDIUM = 0.7  # Threshold for medium evidence

@@ -669,16 +669,175 @@ Road segments use segment-based tracking (split at intersections).
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `sd_method` | string | How date was inferred: ml, building, bounded, fallback |
+| `sd_method` | string | How date was inferred: 'ml', 'building', 'building_override', 'fallback' |
 | `sd_buildings` | int | Number of nearby buildings used for inference |
 | `sd_offset` | int | Years subtracted from building date (typically -2) |
+| `sd_inherited` | bool | true if date was inherited from buildings |
 
-### Date Inference Logic
+### Road Date Inference Priority System
 
-Roads are dated using this fallback chain:
-1. **ML detection**: If road visible in dated historical map
-2. **Building-based**: Earliest nearby building date minus 2 years
-3. **Bounded**: Map era (1880, 1904, 1947) for ML roads
-4. **Fallback**: 1960
+Roads are dated using a priority-based fallback system that combines ML detection evidence with building-based inference.
 
-The building-based method uses the insight that local roads are typically built 1-2 years before the houses they serve.
+#### Priority Logic
+
+The system resolves road dates using this priority order:
+
+1. **ML detection (high/medium evidence)** - Highest priority when evidence is reliable
+2. **Building-based inference** - Can override low-evidence ML dates
+3. **Year 2000 fallback** - Final fallback for undated roads
+
+#### Detailed Rules
+
+| Scenario | ML Evidence | Building Date | Result | sd_method |
+|----------|-------------|---------------|---------|-----------|
+| ML detection with high confidence | `ev='h'` | Any | Use ML date | `'ml'` |
+| ML detection with medium confidence | `ev='m'` | Any | Use ML date | `'ml'` |
+| ML detection with low confidence | `ev='l'` | Available | Use building date | `'building_override'` |
+| ML detection with low confidence | `ev='l'` | None | Use ML date | `'ml'` |
+| No ML detection | N/A | Available | Use building date | `'building'` |
+| No ML detection | N/A | None | Use 2000 | `'fallback'` |
+
+**Key insight**: ML detection with high or medium evidence takes precedence. Building-based inference can only override ML dates when the ML evidence is low (`ev='l'`).
+
+#### Building-Based Date Calculation
+
+When using building-based inference:
+
+1. **Find nearby buildings**: Search within a radius (typically 50m)
+2. **Filter by evidence**: Only use buildings with `ev='h'` or `ev='m'`
+3. **Select earliest**: Find the building with the earliest `sd` (construction year)
+4. **Apply offset**: Subtract offset years (typically 2) from the building's `sd`
+5. **Set metadata**:
+   - `sd_method = 'building'` or `'building_override'`
+   - `sd_buildings = count of buildings found`
+   - `sd_offset = -2` (years subtracted)
+   - `sd_inherited = true`
+   - `ev = 'l'` (inherited dates are low evidence)
+
+**Rationale**: Local roads are typically constructed 1-2 years before the buildings they serve, allowing us to infer road construction dates from nearby buildings.
+
+#### Method Values
+
+| sd_method | Description | Evidence Level |
+|-----------|-------------|----------------|
+| `'ml'` | Date from ML detection on historical maps | Varies (h/m/l) |
+| `'building'` | Date inferred from nearby buildings (no ML data) | Low (l) |
+| `'building_override'` | Building date overrode low-confidence ML date | Low (l) |
+| `'fallback'` | Default year 2000 (no other data available) | Low (l) |
+
+#### Example Records
+
+**ML detection with high evidence (not overridden):**
+```json
+{
+  "rid": "osm-way-12345",
+  "sd": 1880,
+  "sd_method": "ml",
+  "sd_inherited": false,
+  "ev": "h",
+  "name": "Kongens gate"
+}
+```
+
+**Building-based inference (no ML data):**
+```json
+{
+  "rid": "osm-way-67890",
+  "sd": 1923,
+  "sd_method": "building",
+  "sd_buildings": 5,
+  "sd_offset": -2,
+  "sd_inherited": true,
+  "ev": "l",
+  "name": "Residential street"
+}
+```
+
+**Building date overrides low-confidence ML:**
+```json
+{
+  "rid": "osm-way-24680",
+  "sd": 1905,
+  "sd_method": "building_override",
+  "sd_buildings": 3,
+  "sd_offset": -2,
+  "sd_inherited": true,
+  "ev": "l",
+  "name": "Side street"
+}
+```
+
+**Fallback to year 2000:**
+```json
+{
+  "rid": "osm-way-13579",
+  "sd": 2000,
+  "sd_method": "fallback",
+  "sd_inherited": false,
+  "ev": "l",
+  "name": "Modern road"
+}
+```
+
+---
+
+# Water Feature Temporal Data Schema
+
+Water features track temporal changes to waterbodies including filled harbors, dammed lakes, and river course changes.
+
+## Properties
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `src` | string | Yes | Source: 'osm', 'man' (manual) |
+| `sd` | int | Yes | Start date - when water existed |
+| `ed` | int/null | No | End date - when filled/canalized (null if still exists) |
+| `ev` | string | Yes | Evidence level: 'h', 'm', 'l' |
+| `wtype` | string | Yes | Water type: 'river', 'fjord', 'lake', 'canal', 'harbor' |
+| `name` | string | No | Feature name (e.g., 'Brattøra Harbor') |
+| `notes` | string | No | Additional notes |
+
+## Water Types
+
+| Type | Description |
+|------|-------------|
+| `river` | Rivers and streams |
+| `fjord` | Fjords and coastal inlets |
+| `lake` | Lakes and ponds |
+| `canal` | Man-made canals |
+| `harbor` | Harbor basins (often filled in) |
+
+## Example
+
+```json
+{
+    "type": "Feature",
+    "geometry": {"type": "Polygon", "coordinates": [...]},
+    "properties": {
+        "src": "man",
+        "sd": 1700,
+        "ed": 1960,
+        "ev": "h",
+        "wtype": "harbor",
+        "name": "Brattøra Harbor",
+        "notes": "Filled for railway yard expansion"
+    }
+}
+```
+
+## Visualization Rules
+
+When displaying water features for year Y:
+
+1. **Show feature if**: `sd <= Y AND (ed is null OR ed >= Y)`
+2. **Color by water type**:
+   - Harbor: Navy blue with transparency
+   - River: Light blue
+   - Fjord: Deep blue
+   - Lake: Cyan blue
+   - Canal: Blue-gray
+3. **Style by evidence**:
+   - High evidence (ev='h'): Solid fill
+   - Medium evidence (ev='m'): Semi-transparent
+   - Low evidence (ev='l'): Transparent with dashed outline
+4. **Labels**: Show `name` for features with evidence >= 'm'

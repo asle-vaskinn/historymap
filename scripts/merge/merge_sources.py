@@ -385,6 +385,8 @@ def inherit_dates_from_neighbors(
     SEFRAK buildings are excluded as they represent heritage buildings
     with unusually old dates that would skew estimates.
 
+    Uses scipy's cKDTree for efficient O(n log n) k-nearest-neighbor queries.
+
     Args:
         features: List of building features
         nearest_k: Number of nearest neighbors to use for median (default: 3)
@@ -395,6 +397,8 @@ def inherit_dates_from_neighbors(
         Tuple of (updated features, stats dict)
     """
     import statistics
+    import numpy as np
+    from scipy.spatial import cKDTree
 
     if exclude_sources is None:
         exclude_sources = ['sefrak']  # Exclude SEFRAK - heritage buildings are outliers
@@ -409,7 +413,8 @@ def inherit_dates_from_neighbors(
     # Donors: has sd, high/medium evidence, NOT from excluded sources
     donors = []
     recipients = []
-    donor_centroids = []
+    donor_coords = []  # List of (x, y) tuples for KDTree
+    donor_dates = []   # Corresponding dates
 
     for f in features:
         props = f.get('properties', {})
@@ -421,15 +426,15 @@ def inherit_dates_from_neighbors(
         if (ev in ('h', 'm') and
             props.get('sd') is not None and
             date_src not in exclude_sources):
-            donors.append(f)
             # Get centroid for spatial indexing
             try:
                 geom = shape(f['geometry'])
                 centroid = geom.centroid
-                donor_centroids.append(centroid)
+                # Scale coordinates: x by cos(63°) ≈ 0.45 to normalize distances
+                donor_coords.append((centroid.x * 0.45 * 111000, centroid.y * 111000))
+                donor_dates.append(props['sd'])
+                donors.append(f)
             except Exception:
-                # Skip invalid geometries
-                donors.pop()
                 continue
         elif props.get('sd') is None:
             recipients.append(f)
@@ -451,77 +456,73 @@ def inherit_dates_from_neighbors(
             'fallback_count': len(recipients)
         }
 
-    # Build spatial index of donor centroids
-    donor_tree = STRtree(donor_centroids)
+    # Build KDTree for efficient nearest-neighbor queries
+    print(f"  Building KDTree...")
+    donor_coords_arr = np.array(donor_coords)
+    donor_dates_arr = np.array(donor_dates)
+    tree = cKDTree(donor_coords_arr)
 
-    # Use generous buffer for spatial query (5km should cover most cases)
-    buffer_deg = 0.1  # ~10km at this latitude
-
-    # Stats counters
-    median_count = 0
-    fallback_count = 0
-    avg_distances = []
+    # Get recipient centroids
+    print(f"  Processing recipients...")
+    recipient_coords = []
+    valid_recipients = []
+    invalid_count = 0
 
     for recipient in recipients:
         try:
             geom = shape(recipient['geometry'])
             centroid = geom.centroid
+            recipient_coords.append((centroid.x * 0.45 * 111000, centroid.y * 111000))
+            valid_recipients.append(recipient)
         except Exception:
             # Can't process, use fallback
             recipient['properties']['sd'] = fallback_year
             recipient['properties']['ev'] = 'l'
             recipient['properties']['sd_inherited'] = True
             recipient['properties']['sd_method'] = 'fallback'
-            fallback_count += 1
-            continue
+            invalid_count += 1
 
-        # Query nearby donors using bounding box
-        query_box = centroid.buffer(buffer_deg)
-        candidate_indices = donor_tree.query(query_box)
+    if valid_recipients:
+        recipient_coords_arr = np.array(recipient_coords)
 
-        # Calculate distances to all candidates
-        donors_with_dist = []
-        for idx in candidate_indices:
-            donor_centroid = donor_centroids[idx]
-            # Calculate approximate distance in meters
-            dx = (centroid.x - donor_centroid.x) * 111000 * 0.45  # cos(63°) ≈ 0.45
-            dy = (centroid.y - donor_centroid.y) * 111000
-            dist_m = (dx**2 + dy**2) ** 0.5
+        # Query K nearest neighbors for all recipients at once (vectorized)
+        print(f"  Querying {len(valid_recipients)} recipients for {nearest_k} nearest neighbors...")
+        distances, indices = tree.query(recipient_coords_arr, k=nearest_k)
 
-            donor_date = donors[idx]['properties']['sd']
-            donors_with_dist.append((idx, dist_m, donor_date))
+        # Process results
+        for i, recipient in enumerate(valid_recipients):
+            # Get dates of K nearest donors
+            nearest_indices = indices[i]
+            nearest_distances = distances[i]
 
-        if donors_with_dist:
-            # Sort by distance and take nearest K
-            donors_with_dist.sort(key=lambda x: x[1])
-            nearest_donors = donors_with_dist[:nearest_k]
+            # Handle case where we have fewer donors than K
+            if nearest_k == 1:
+                dates = [donor_dates_arr[nearest_indices]]
+                avg_dist = nearest_distances
+            else:
+                dates = donor_dates_arr[nearest_indices].tolist()
+                avg_dist = np.mean(nearest_distances)
 
-            # Take median of nearest K dates
-            dates = [d[2] for d in nearest_donors]
+            # Take median
             median_date = int(statistics.median(dates))
-            avg_dist = sum(d[1] for d in nearest_donors) / len(nearest_donors)
 
             recipient['properties']['sd'] = median_date
             recipient['properties']['ev'] = 'l'
             recipient['properties']['sd_inherited'] = True
             recipient['properties']['sd_method'] = 'median'
-            recipient['properties']['sd_donors'] = len(nearest_donors)
-            recipient['properties']['sd_avg_dist'] = round(avg_dist, 0)
-
-            median_count += 1
-            avg_distances.append(avg_dist)
-
-        else:
-            # No donors found at all (very rare)
-            recipient['properties']['sd'] = fallback_year
-            recipient['properties']['ev'] = 'l'
-            recipient['properties']['sd_inherited'] = True
-            recipient['properties']['sd_method'] = 'fallback'
-
-            fallback_count += 1
+            recipient['properties']['sd_donors'] = len(dates)
+            recipient['properties']['sd_avg_dist'] = round(float(avg_dist), 0)
 
     # Calculate stats
-    overall_avg_dist = sum(avg_distances) / len(avg_distances) if avg_distances else 0
+    median_count = len(valid_recipients)
+    fallback_count = invalid_count
+
+    # Get overall average distance
+    if median_count > 0:
+        all_avg_dists = [r['properties'].get('sd_avg_dist', 0) for r in valid_recipients]
+        overall_avg_dist = sum(all_avg_dists) / len(all_avg_dists)
+    else:
+        overall_avg_dist = 0
 
     print(f"  Method breakdown:")
     print(f"    Median (nearest {nearest_k}): {median_count} (avg dist: {overall_avg_dist:.0f}m)")
@@ -898,19 +899,35 @@ def detect_replacements(
 
         # Use spatial index if available
         if spatial_index:
-            # Find all overlapping buildings using spatial index
+            # Find all overlapping buildings using spatial index (O(log n))
             matches = find_matches(old_feat, [], threshold, spatial_index)
 
-            # Also check for centroid containment (may not meet overlap threshold)
+            # Also check for centroid containment using spatial index (O(log n))
             # This catches cases where a small old building is replaced by a much larger new one
-            for new_feat in newer_buildings:
-                new_geom = new_feat.get('geometry')
-                old_geom = old_feat.get('geometry')
+            old_geom = old_feat.get('geometry')
+            if old_geom and HAS_SHAPELY:
+                try:
+                    old_shape = shape(old_geom)
+                    old_centroid = old_shape.centroid
+                    index, geometries, indexed_features = spatial_index
 
-                if new_geom and old_geom and check_centroid_containment(old_geom, new_geom):
-                    # Check if already in matches
-                    if not any(m[0] is new_feat for m in matches):
-                        matches.append((new_feat, 1.0))  # Score 1.0 for centroid containment
+                    # Query spatial index for buildings near the old building's centroid
+                    # Use a small buffer around centroid to find potential containing polygons
+                    centroid_buffer = old_centroid.buffer(0.0001)  # ~10m buffer
+                    candidate_indices = index.query(centroid_buffer)
+
+                    for idx in candidate_indices:
+                        new_feat = indexed_features[idx]
+                        if new_feat is old_feat:
+                            continue
+                        # Check if already in matches
+                        if any(m[0] is new_feat for m in matches):
+                            continue
+                        new_geom = new_feat.get('geometry')
+                        if new_geom and check_centroid_containment(old_geom, new_geom):
+                            matches.append((new_feat, 1.0))  # Score 1.0 for centroid containment
+                except Exception:
+                    pass
 
             for new_feat, overlap in matches:
                 new_sd = new_feat['properties'].get('sd')
