@@ -100,6 +100,226 @@ body {
     overflow: hidden;
 }
 
+/* Layer Panel (Left) */
+.layer-panel {
+    width: 260px;
+    background: #16213e;
+    border-right: 1px solid #0f3460;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.layer-panel-header {
+    padding: 14px 16px;
+    background: #0f3460;
+    border-bottom: 1px solid #1a4a7a;
+}
+
+.layer-panel-header h2 {
+    font-size: 15px;
+    font-weight: 600;
+    color: #e0e0e0;
+    margin: 0;
+}
+
+.layer-section {
+    padding: 12px 16px;
+    border-bottom: 1px solid #0f3460;
+}
+
+.layer-section h3 {
+    font-size: 11px;
+    font-weight: 600;
+    color: #60a5fa;
+    margin: 0 0 10px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Radio buttons for background/overlay */
+.layer-radios {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.layer-radio {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    padding: 4px 0;
+}
+
+.layer-radio input[type="radio"] {
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border: 2px solid #4b5563;
+    border-radius: 50%;
+    background: transparent;
+    cursor: pointer;
+    position: relative;
+}
+
+.layer-radio input[type="radio"]:checked {
+    border-color: #667eea;
+}
+
+.layer-radio input[type="radio"]:checked::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 6px;
+    height: 6px;
+    background: #667eea;
+    border-radius: 50%;
+}
+
+.layer-radio span {
+    font-size: 12px;
+    color: #94a3b8;
+}
+
+.layer-radio:hover span {
+    color: #e0e0e0;
+}
+
+/* Opacity control */
+.opacity-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #0f3460;
+}
+
+.opacity-control label {
+    font-size: 11px;
+    color: #6b7280;
+}
+
+.opacity-control input[type="range"] {
+    flex: 1;
+    height: 4px;
+    background: #1a4a7a;
+    border-radius: 2px;
+    appearance: none;
+    cursor: pointer;
+}
+
+.opacity-control input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    background: #667eea;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+#overlayOpacityValue {
+    font-size: 11px;
+    color: #94a3b8;
+    min-width: 32px;
+    text-align: right;
+}
+
+/* Data layers */
+.data-layers {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.data-layer-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.layer-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    flex: 1;
+}
+
+.layer-checkbox input[type="checkbox"] {
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border: 2px solid #4b5563;
+    border-radius: 3px;
+    background: transparent;
+    cursor: pointer;
+    position: relative;
+}
+
+.layer-checkbox input[type="checkbox"]:checked {
+    background: #667eea;
+    border-color: #667eea;
+}
+
+.layer-checkbox input[type="checkbox"]:checked::after {
+    content: '✓';
+    position: absolute;
+    top: -2px;
+    left: 1px;
+    font-size: 10px;
+    color: white;
+}
+
+.layer-checkbox span {
+    font-size: 12px;
+    color: #94a3b8;
+}
+
+.layer-checkbox:hover span {
+    color: #e0e0e0;
+}
+
+/* Mini opacity slider */
+.layer-opacity-mini {
+    width: 50px;
+}
+
+.mini-slider {
+    width: 100%;
+    height: 3px;
+    background: #1a4a7a;
+    border-radius: 2px;
+    appearance: none;
+    cursor: pointer;
+}
+
+.mini-slider::-webkit-slider-thumb {
+    appearance: none;
+    width: 10px;
+    height: 10px;
+    background: #4b5563;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.mini-slider:hover::-webkit-slider-thumb {
+    background: #667eea;
+}
+
+/* Legend section */
+.legend-section {
+    background: rgba(102, 126, 234, 0.05);
+}
+
+.layer-legend-items {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
 /* Map */
 #map {
     flex: 1;
@@ -410,4 +630,573 @@ body {
 .btn-clear:hover {
     background: #333;
     color: #e0e0e0;
+}
+
+/* Layers Section */
+.layers-section {
+    background: rgba(6, 182, 212, 0.05);
+}
+
+.layer-toggles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.layer-toggle {
+    padding: 6px 12px;
+    background: #0f3460;
+    border: 1px solid #1a4a7a;
+    border-radius: 4px;
+    color: #94a3b8;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.layer-toggle:hover {
+    background: #1a4a7a;
+    color: #e0e0e0;
+}
+
+.layer-toggle.active {
+    background: #06b6d4;
+    border-color: #0891b2;
+    color: white;
+}
+
+.layer-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* Water Section */
+.water-section {
+    background: rgba(0, 119, 190, 0.05);
+}
+
+.water-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #94a3b8;
+}
+
+.legend-color {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    display: inline-block;
+}
+
+.section-hint {
+    font-size: 11px;
+    color: #6b7280;
+    margin-top: 10px;
+    line-height: 1.4;
+}
+
+#waterEditBtn.active {
+    background: #667eea;
+    border-color: #667eea;
+    color: white;
+}
+
+/* Water Popup */
+.water-popup {
+    padding: 12px 16px;
+    min-width: 220px;
+}
+
+.water-popup .popup-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #60a5fa;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #0f3460;
+    padding-bottom: 8px;
+}
+
+.water-popup .popup-info {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-bottom: 12px;
+    line-height: 1.6;
+}
+
+.water-popup .popup-info strong {
+    color: #e0e0e0;
+}
+
+.btn-trace {
+    background: #0f3460;
+    color: #60a5fa;
+    border-color: #1a4a7a !important;
+}
+
+.btn-trace:hover {
+    background: #1a4a7a;
+    color: #fff;
+}
+
+/* Water Edit Form */
+.water-edit-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.water-edit-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 11px;
+    color: #94a3b8;
+}
+
+.water-edit-form input,
+.water-edit-form select {
+    padding: 6px 10px;
+    background: #0f3460;
+    border: 1px solid #1a4a7a;
+    border-radius: 4px;
+    color: #e0e0e0;
+    font-size: 12px;
+}
+
+.water-edit-form input:focus,
+.water-edit-form select:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.btn-save {
+    background: #22c55e !important;
+    color: white !important;
+    border-color: #16a34a !important;
+}
+
+.btn-save:hover {
+    background: #16a34a !important;
+}
+
+.btn-delete {
+    background: #ef4444 !important;
+    color: white !important;
+    border-color: #dc2626 !important;
+}
+
+.btn-delete:hover {
+    background: #dc2626 !important;
+}
+
+.btn-cancel {
+    background: #4b5563 !important;
+    color: #e0e0e0 !important;
+    border-color: #6b7280 !important;
+}
+
+.btn-cancel:hover {
+    background: #6b7280 !important;
+}
+
+/* New Water Form Popup */
+.water-new-form {
+    padding: 12px 16px;
+    min-width: 240px;
+}
+
+.water-new-form h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #d97706;
+    margin-bottom: 12px;
+    border-bottom: 1px solid #0f3460;
+    padding-bottom: 8px;
+}
+
+.water-new-form form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.water-new-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 11px;
+    color: #94a3b8;
+}
+
+.water-new-form input,
+.water-new-form select {
+    padding: 6px 10px;
+    background: #0f3460;
+    border: 1px solid #1a4a7a;
+    border-radius: 4px;
+    color: #e0e0e0;
+    font-size: 12px;
+}
+
+.water-new-form input:focus,
+.water-new-form select:focus {
+    outline: none;
+    border-color: #d97706;
+}
+
+/* Draw Instructions */
+.draw-instructions {
+    position: fixed;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(217, 119, 6, 0.95);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 1000;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    display: none;
+}
+
+/* MapboxDraw controls styling */
+.mapboxgl-ctrl-group {
+    background: #16213e !important;
+    border: 1px solid #0f3460 !important;
+}
+
+.mapboxgl-ctrl-group button {
+    background-color: #16213e !important;
+    border-bottom: 1px solid #0f3460 !important;
+}
+
+.mapboxgl-ctrl-group button:hover {
+    background-color: #0f3460 !important;
+}
+
+.mapboxgl-ctrl-group button.active {
+    background-color: #667eea !important;
+}
+
+/* ==========================================
+   Georeferencing Styles
+   ========================================== */
+
+/* View Container - holds canvas and map side by side in georef mode */
+.view-container {
+    flex: 1;
+    display: flex;
+    position: relative;
+    overflow: hidden;
+}
+
+.view-container #map {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Split view mode */
+.view-container.split-view {
+    display: flex;
+}
+
+.view-container.split-view #map {
+    flex: 1;
+}
+
+/* Georef Image Panel (left side in split view) */
+.georef-image-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: #1a1a2e;
+    border-right: 2px solid #667eea;
+    min-width: 0;
+}
+
+.image-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: #16213e;
+    border-bottom: 1px solid #0f3460;
+}
+
+.image-panel-header .panel-title {
+    font-weight: 600;
+    color: #4ecca3;
+    font-size: 13px;
+}
+
+.image-panel-header .panel-hint {
+    font-size: 11px;
+    color: #888;
+}
+
+#georefCanvas {
+    flex: 1;
+    width: 100%;
+    cursor: crosshair;
+    background: #2c3e50;
+}
+
+/* Georef Section in ML Panel */
+.georef-section {
+    border-top: 1px solid #4ecca3;
+}
+
+.georef-select-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.georef-select-group label {
+    font-size: 11px;
+    color: #94a3b8;
+    white-space: nowrap;
+}
+
+.georef-select-group select {
+    flex: 1;
+    padding: 6px 8px;
+    background: #0f3460;
+    border: 1px solid #1a4a7a;
+    border-radius: 4px;
+    color: #e0e0e0;
+    font-size: 11px;
+    min-width: 0;
+}
+
+.georef-upload {
+    margin-bottom: 10px;
+}
+
+.ml-button-small {
+    padding: 4px 8px;
+    font-size: 12px;
+    background: #0f3460;
+    color: #e0e0e0;
+    border: 1px solid #1a4a7a;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.ml-button-small:hover {
+    background: #1a4a7a;
+}
+
+/* GCP Panel */
+.gcp-panel {
+    background: #1a2942;
+    border: 1px solid #4ecca3;
+}
+
+.gcp-instructions {
+    background: #0f3460;
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+    font-size: 11px;
+    line-height: 1.6;
+}
+
+.gcp-instructions p {
+    margin: 4px 0;
+}
+
+.gcp-instructions .highlight-image {
+    color: #f59e0b;
+    font-weight: 600;
+}
+
+.gcp-instructions .highlight-map {
+    color: #4ecca3;
+    font-weight: 600;
+}
+
+/* GCP List */
+.gcp-list {
+    max-height: 200px;
+    overflow-y: auto;
+    background: #0d1b2a;
+    border-radius: 4px;
+    padding: 8px;
+    margin-bottom: 10px;
+}
+
+.gcp-empty {
+    text-align: center;
+    color: #666;
+    padding: 20px;
+    font-size: 12px;
+}
+
+.gcp-item {
+    background: #16213e;
+    border: 1px solid #0f3460;
+    border-radius: 4px;
+    padding: 8px 10px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.gcp-item:hover {
+    border-color: #4ecca3;
+}
+
+.gcp-item.selected {
+    border-color: #4ecca3;
+    background: #1a3a5c;
+}
+
+.gcp-item.incomplete {
+    border-left: 3px solid #f59e0b;
+}
+
+.gcp-item.complete {
+    border-left: 3px solid #4ecca3;
+}
+
+.gcp-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.gcp-item-id {
+    font-weight: 600;
+    color: #4ecca3;
+    font-size: 12px;
+}
+
+.gcp-item-status {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+.gcp-item-status.complete {
+    background: #1d4e3e;
+    color: #4ecca3;
+}
+
+.gcp-item-status.incomplete {
+    background: #4a3a1f;
+    color: #f59e0b;
+}
+
+.gcp-item-coords {
+    font-size: 10px;
+    color: #888;
+    font-family: monospace;
+}
+
+.gcp-item-coords .pixel {
+    color: #f59e0b;
+}
+
+.gcp-item-coords .geo {
+    color: #4ecca3;
+}
+
+.gcp-item-actions {
+    display: flex;
+    gap: 4px;
+    margin-top: 6px;
+}
+
+.gcp-item-actions button {
+    padding: 2px 6px;
+    font-size: 10px;
+    background: #0f3460;
+    color: #e0e0e0;
+    border: 1px solid #1a4a7a;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.gcp-item-actions button:hover {
+    background: #1a4a7a;
+}
+
+.gcp-item-actions button.delete:hover {
+    background: #7f1d1d;
+    border-color: #ef4444;
+}
+
+/* GCP Stats */
+.gcp-stats {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+/* GCP Markers on canvas */
+.gcp-marker {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: bold;
+    color: white;
+}
+
+.gcp-marker.pixel {
+    border: 3px solid #f59e0b;
+    background: rgba(245, 158, 11, 0.3);
+}
+
+.gcp-marker.geo {
+    border: 3px solid #4ecca3;
+    background: rgba(78, 204, 163, 0.3);
+}
+
+.gcp-marker.incomplete {
+    border-style: dashed;
+}
+
+/* Georef Mode Instructions Banner */
+.georef-banner {
+    position: fixed;
+    top: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(78, 204, 163, 0.95);
+    color: #1a1a2e;
+    padding: 10px 24px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    z-index: 1000;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    display: none;
+}
+
+.georef-banner.active {
+    display: block;
 }

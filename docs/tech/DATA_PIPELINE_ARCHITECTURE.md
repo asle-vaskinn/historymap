@@ -56,13 +56,17 @@ data/
 │   ├── roads_merged.geojson   # Merged roads (ML sources only)
 │   └── merge_report.json      # Stats per source, conflicts resolved
 │
-└── export/                     # FRONTEND-READY OUTPUT
+└── export/                     # FRONTEND-READY OUTPUT (served by Docker)
     ├── buildings.geojson      # Buildings for development
-    ├── buildings.pmtiles      # Buildings for production
+    ├── buildings_temporal.pmtiles  # Buildings for production
     ├── roads_temporal.geojson # Roads for development
-    ├── roads_temporal.pmtiles # Roads for production
-    └── export_config.json     # Which merged dataset, filters applied
+    ├── trondheim.pmtiles      # Base map (OSM roads, water, landuse)
+    ├── water.pmtiles          # Water features
+    ├── manifest.json          # File hashes for cache busting
+    └── *.meta.json            # Export metadata per file
 ```
+
+**Important**: Docker serves files from `data/export/`, not `frontend/data/`. The `rebuild.sh` script copies pipeline output to `data/export/` and ensures base tiles are present.
 
 ## Pipeline Stages
 
@@ -624,3 +628,83 @@ After merging, buildings have combined metadata:
   "geometry": { ... }
 }
 ```
+
+## Cache Busting & Versioning
+
+The pipeline generates a `manifest.json` that enables cache busting for frontend assets.
+
+### Manifest Schema
+
+```json
+{
+  "version": "1.0",
+  "generated_at": "2026-01-01T11:56:34.481554+00:00",
+  "files": {
+    "buildings_temporal.pmtiles": {
+      "size": 12692737,
+      "mtime": 1767267999,
+      "hash": "9f1b81b0d36d"
+    },
+    "trondheim.pmtiles": {
+      "size": 24973977,
+      "mtime": 1767268551,
+      "hash": "93d032b81763"
+    }
+  },
+  "build_version": "1767268551"
+}
+```
+
+### How It Works
+
+1. **Export stage** generates `manifest.json` with file hashes
+2. **Frontend** loads manifest on startup
+3. **PMTiles URLs** include version hash: `data/buildings_temporal.pmtiles?v=9f1b81b0d36d`
+4. **Nginx** serves with aggressive caching (`Cache-Control: public, immutable`)
+5. **Hash changes** → browser fetches fresh content
+
+### Frontend Usage
+
+```javascript
+// app.js uses getVersionedUrl() for all data files
+function getVersionedUrl(path) {
+    const filename = path.split('/').pop();
+    const fileInfo = dataManifest.files?.[filename];
+    if (fileInfo?.hash) {
+        return `${path}?v=${fileInfo.hash}`;
+    }
+    return path;
+}
+
+// PMTiles sources use versioned URLs
+sources: {
+    'buildings-dated': {
+        type: 'vector',
+        url: `pmtiles://${getVersionedUrl(CONFIG.buildingsPath)}`
+    }
+}
+```
+
+### Docker Serving
+
+```yaml
+# docker-compose.yml
+volumes:
+  - ./data/export:/usr/share/nginx/html/data:ro
+```
+
+**Key points:**
+- `data/export/` is the single source of truth for served files
+- `rebuild.sh` uses `--force-recreate` to ensure volume mounts are refreshed
+- Base tiles (`trondheim.pmtiles`) are copied from `frontend/data/` to `data/export/`
+
+### Nginx Cache Headers
+
+```nginx
+location /data/ {
+    expires 30d;
+    add_header Cache-Control "public, immutable";
+}
+```
+
+Since URLs are versioned, aggressive caching is safe - the hash changes when content changes.

@@ -24,10 +24,20 @@ Change Classification:
 """
 
 import json
+import math
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
-import math
+
+# Import geographic context for coordinate conversions
+try:
+    from constants import GEO
+except ImportError:
+    class _FallbackGeo:
+        avg_meters_per_degree = 80000
+        def meters_to_degrees(self, m): return m / 80000
+        def degrees_to_meters(self, d): return d * 80000
+    GEO = _FallbackGeo()
 
 try:
     from shapely.geometry import shape, mapping, LineString, Point
@@ -51,7 +61,7 @@ def sample_line_points(line_geom: LineString, interval_m: float = 5.0) -> List[P
     """
     # Convert interval from meters to approximate degrees at 63°N
     # At 63°N: 1° lat ≈ 111km, 1° lon ≈ 50km
-    interval_deg = interval_m / 80000  # Average approximation
+    interval_deg = GEO.meters_to_degrees(interval_m)
 
     points = []
     total_length = line_geom.length
@@ -77,10 +87,10 @@ def point_distance_m(p1: Point, p2: Point) -> float:
     """
     Calculate distance between two points in meters.
 
-    Uses approximate conversion for Trondheim latitude (~63°N).
+    Uses GeoContext for coordinate conversions.
     """
-    dx = (p1.x - p2.x) * 50000  # longitude to meters at 63°N
-    dy = (p1.y - p2.y) * 111000  # latitude to meters
+    dx = (p1.x - p2.x) * GEO.meters_per_degree_lon
+    dy = (p1.y - p2.y) * 111000  # latitude is constant ~111km/degree
     return math.sqrt(dx**2 + dy**2)
 
 
@@ -151,8 +161,8 @@ def calculate_hausdorff_m(line1: LineString, line2: LineString) -> float:
     # Hausdorff distance in degrees
     dist_deg = line1.hausdorff_distance(line2)
 
-    # Convert to approximate meters at Trondheim latitude (~63°N)
-    dist_m = dist_deg * 80000  # Average approximation
+    # Convert to meters using GeoContext
+    dist_m = GEO.degrees_to_meters(dist_deg)
 
     return dist_m
 
@@ -185,7 +195,7 @@ def detect_width_change(
 
     # Check if there's consistent offset (potential widening)
     avg_dist = sum(distances) / len(distances)
-    avg_dist_m = avg_dist * 80000  # Convert to meters
+    avg_dist_m = GEO.degrees_to_meters(avg_dist)
 
     # If average distance is between 2-10m, it might be a widening
     return 2 <= avg_dist_m <= 10

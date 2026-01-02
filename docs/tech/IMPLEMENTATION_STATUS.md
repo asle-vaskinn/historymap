@@ -1,31 +1,34 @@
 # Loose Ends and Implementation Status
 
 **Generated:** 2025-12-17
-**Updated:** 2025-12-20
+**Updated:** 2026-01-01
 **Purpose:** Document incomplete implementations, dead code, spec mismatches, and orphaned files
+
+---
+
+## Recently Completed (2026-01-01)
+
+### Cache Busting & Versioning ✅
+- **manifest.json** generated with file hashes during export
+- **Frontend** uses `getVersionedUrl()` for all PMTiles sources
+- **Nginx** serves with aggressive caching (`Cache-Control: public, immutable`)
+- **Docker** uses `--force-recreate` via `rebuild.sh` to ensure fresh content
+
+### PMTiles Integration ✅
+- **Frontend** now fully uses PMTiles (not GeoJSON) for buildings
+- **Source type** is `'vector'` with proper `source-layer` configuration
+- **Base tiles** (`trondheim.pmtiles`) copied to `data/export/` during rebuild
+
+### Docker Volume Architecture ✅
+- **Single source of truth:** `data/export/` is served by Docker
+- **Volume mount:** `./data/export:/usr/share/nginx/html/data:ro`
+- **rebuild.sh** handles copying base tiles and recreating containers
 
 ---
 
 ## 1. Hanging/Incomplete Code
 
 ### Frontend (app.js)
-
-#### Incomplete PMTiles Integration
-- **File:** `/Users/vaskinn/Development/private/historymap/frontend/app.js`
-- **Lines:** 17-18, 136-150
-- **Issue:** Code references `buildings_temporal.pmtiles` and PMTiles sources but actually loads GeoJSON files
-- **Evidence:**
-  ```javascript
-  buildingsPath: '../data/buildings_temporal.pmtiles',  // Buildings with SEFRAK dates
-
-  'buildings-dated': {
-      type: 'geojson',  // <-- Should be 'vector' for PMTiles
-      data: '../data/buildings.geojson',
-      attribution: '&copy; OSM + SEFRAK + ML building dating'
-  },
-  ```
-- **Impact:** PMTiles performance benefits not realized, loading 15-19MB GeoJSON instead of streamed tiles
-- **Resolution:** Either fully implement PMTiles or update comments to reflect GeoJSON usage
 
 #### Unused Feature Count Logic
 - **File:** `/Users/vaskinn/Development/private/historymap/frontend/app.js`

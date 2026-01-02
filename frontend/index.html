@@ -79,7 +79,7 @@
             <input type="checkbox" id="src-mat" checked data-date-source="mat">
             <input type="checkbox" id="src-tk" checked data-date-source="tk">
             <input type="checkbox" id="src-man" checked data-date-source="man">
-            <input type="checkbox" id="src-finn" checked data-date-source="finn">
+            <input type="checkbox" id="src-finn" checked data-date-source="fin">
             <input type="checkbox" id="src-osm" checked data-date-source="osm">
             <input type="checkbox" id="snap-kv1880" checked data-snapshot-source="kv1880">
             <input type="checkbox" id="snap-kv1904" data-snapshot-source="kv1904">
@@ -104,23 +104,32 @@
 
     <!-- Debug Legend (shown when debug mode active) -->
     <div id="debugLegend" class="debug-legend" style="display: none;">
-        <div class="debug-legend-title">Date Sources</div>
+        <div class="debug-legend-title">Date Sources (click to filter)</div>
         <div class="debug-legend-section">
             <div class="debug-legend-subtitle">Direct Sources</div>
-            <div class="debug-legend-item"><span class="legend-color" style="background:#3498db"></span>FINN.no</div>
-            <div class="debug-legend-item"><span class="legend-color" style="background:#8b4513"></span>SEFRAK</div>
-            <div class="debug-legend-item"><span class="legend-color" style="background:#2ecc71"></span>Manual</div>
-            <div class="debug-legend-item"><span class="legend-color" style="background:#9b59b6"></span>TK</div>
-            <div class="debug-legend-item"><span class="legend-color" style="background:#1abc9c"></span>Matrikkelen</div>
+            <label class="debug-legend-item filter-checkbox">
+                <input type="checkbox" id="filter-tk" checked data-source="tk">
+                <span class="legend-color" style="background:#9b59b6"></span>Trondheim Kommune (5287)
+            </label>
+            <label class="debug-legend-item filter-checkbox">
+                <input type="checkbox" id="filter-finn" checked data-source="fin">
+                <span class="legend-color" style="background:#3498db"></span>FINN.no (271)
+            </label>
+            <label class="debug-legend-item filter-checkbox">
+                <input type="checkbox" id="filter-manual" checked data-source="man">
+                <span class="legend-color" style="background:#2ecc71"></span>Manual (1)
+            </label>
+            <label class="debug-legend-item filter-checkbox">
+                <input type="checkbox" id="filter-osm" checked data-source="osm">
+                <span class="legend-color" style="background:#1abc9c"></span>OSM (33)
+            </label>
         </div>
         <div class="debug-legend-section">
-            <div class="debug-legend-subtitle">Inherited</div>
-            <div class="debug-legend-item"><span class="legend-color" style="background:#f1c40f"></span>Median (2km)</div>
-            <div class="debug-legend-item"><span class="legend-color" style="background:#e67e22"></span>Nearest</div>
-            <div class="debug-legend-item"><span class="legend-color" style="background:#e74c3c"></span>Fallback</div>
-        </div>
-        <div class="debug-legend-section">
-            <div class="debug-legend-item"><span class="legend-color" style="background:#95a5a6"></span>Unknown</div>
+            <div class="debug-legend-subtitle">Inherited (no direct source)</div>
+            <label class="debug-legend-item filter-checkbox">
+                <input type="checkbox" id="filter-inherited" checked data-source="inh">
+                <span class="legend-color" style="background:#e67e22"></span>Inherited (60994)
+            </label>
         </div>
     </div>
 

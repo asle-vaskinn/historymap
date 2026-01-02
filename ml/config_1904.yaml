@@ -1,0 +1,102 @@
+# Training Configuration for Kartverket 1904 Historical Map
+# Building detection from amtskart-style cartography
+
+model:
+  encoder: resnet34        # Good balance of speed and accuracy
+  pretrained: true         # Use ImageNet pretrained weights
+  classes: 2               # background (0), building (1) - simplified for this task
+
+training:
+  epochs: 30               # Shorter since we have limited data
+  batch_size: 8            # Smaller batch for 100 samples
+  learning_rate: 0.0005    # Lower LR for fine-tuning
+  optimizer: adam
+  weight_decay: 0.0001
+
+  loss: dice               # Good for building segmentation with imbalanced classes
+
+  scheduler:
+    type: reduce_on_plateau
+    mode: max
+    factor: 0.5
+    patience: 5
+    min_lr: 0.00001
+
+  early_stopping:
+    enabled: true
+    patience: 10
+    metric: val_iou
+    mode: max
+
+  mixed_precision: true
+  grad_clip: 1.0
+  save_freq: 5
+  save_best_only: true
+
+data:
+  train_split: 0.8
+  val_split: 0.1
+  test_split: 0.1
+
+  image_size: 512
+  normalize: true
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]
+
+  augmentation:
+    enabled: true
+    horizontal_flip: 0.5
+    vertical_flip: 0.5
+    rotation: 15
+    scale: [0.9, 1.1]
+    brightness: 0.2
+    contrast: 0.2
+    saturation: 0.1
+    hue: 0.05
+
+  # Building vs background is imbalanced - use auto-computed weights
+  class_weights: null
+
+  num_workers: 4
+  pin_memory: true
+
+paths:
+  # 1904 training data - using OSM-matched approach for better coverage
+  data_dir: ../data/training_matched_1904
+
+  # Separate checkpoints for 1904 model
+  checkpoint_dir: ../models/checkpoints_1904
+  log_dir: ../results/training_logs_1904
+  best_model: ../models/checkpoints_1904/best_model.pth
+  last_checkpoint: ../models/checkpoints_1904/last_checkpoint.pth
+
+logging:
+  console_level: INFO
+  file_level: DEBUG
+  log_file: true
+  use_tqdm: true
+  print_freq: 5
+  val_freq: 1
+
+device: auto
+seed: 42
+
+metrics:
+  compute_iou: true
+  compute_accuracy: true
+  compute_confusion_matrix: true
+  iou_threshold: 0.5
+
+# Simplified class names for building-only detection
+class_names:
+  0: background
+  1: building
+
+vectorize:
+  separate_classes: true
+  classes_to_export:
+    - building
+  output_dirs:
+    building: buildings/
+  min_area_m2: 10
+  simplify_tolerance: 1.0

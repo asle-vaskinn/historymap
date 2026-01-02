@@ -11,10 +11,12 @@ Then open: http://localhost:8082/georef_editor.html
 import json
 import subprocess
 import sys
+import re
 from pathlib import Path
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
 import os
+import cgi
 
 # Configuration
 PORT = 8082
@@ -25,8 +27,25 @@ GCPS_DIR = DATA_DIR / "gcps"
 OUTPUT_DIR = DATA_DIR / "output"
 
 # Ensure directories exist
+INPUT_DIR.mkdir(parents=True, exist_ok=True)
 GCPS_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def secure_filename(filename):
+    """
+    Sanitize filename to prevent directory traversal and other security issues.
+    Similar to werkzeug's secure_filename.
+    """
+    # Remove any directory components
+    filename = os.path.basename(filename)
+    # Replace problematic characters
+    filename = re.sub(r'[^\w\s.-]', '', filename)
+    # Remove leading/trailing whitespace and dots
+    filename = filename.strip().strip('.')
+    # Replace multiple spaces/underscores with single one
+    filename = re.sub(r'[\s_]+', '_', filename)
+    return filename or 'unnamed_file'
 
 
 class GeorefHandler(SimpleHTTPRequestHandler):
@@ -36,6 +55,16 @@ class GeorefHandler(SimpleHTTPRequestHandler):
         # Serve from project root
         super().__init__(*args, directory=str(BASE_DIR), **kwargs)
 
+    def do_GET(self):
+        """Handle GET requests for API endpoints."""
+        parsed = urlparse(self.path)
+
+        if parsed.path == "/api/input-files":
+            self.handle_list_input_files()
+        else:
+            # Fall back to default file serving
+            super().do_GET()
+
     def do_POST(self):
         """Handle POST requests for API endpoints."""
         parsed = urlparse(self.path)
@@ -44,6 +73,8 @@ class GeorefHandler(SimpleHTTPRequestHandler):
             self.handle_save_gcps()
         elif parsed.path == "/api/georeference":
             self.handle_georeference()
+        elif parsed.path == "/api/upload-image":
+            self.handle_upload_image()
         else:
             self.send_error(404, "Not found")
 
@@ -141,6 +172,122 @@ class GeorefHandler(SimpleHTTPRequestHandler):
                     "stdout": result.stdout,
                     "stderr": result.stderr
                 }, status=500)
+
+        except Exception as e:
+            self.send_json_response({
+                "success": False,
+                "error": str(e)
+            }, status=500)
+
+    def handle_upload_image(self):
+        """Handle image upload from multipart form data."""
+        try:
+            # Parse multipart form data
+            content_type = self.headers.get('Content-Type', '')
+            if not content_type.startswith('multipart/form-data'):
+                self.send_json_response({
+                    "success": False,
+                    "error": "Expected multipart/form-data"
+                }, status=400)
+                return
+
+            # Parse the form data
+            form = cgi.FieldStorage(
+                fp=self.rfile,
+                headers=self.headers,
+                environ={
+                    'REQUEST_METHOD': 'POST',
+                    'CONTENT_TYPE': content_type,
+                }
+            )
+
+            # Get the uploaded file
+            if 'image' not in form:
+                self.send_json_response({
+                    "success": False,
+                    "error": "No 'image' field in form data"
+                }, status=400)
+                return
+
+            file_item = form['image']
+            if not file_item.file:
+                self.send_json_response({
+                    "success": False,
+                    "error": "No file uploaded"
+                }, status=400)
+                return
+
+            # Get and sanitize filename
+            original_filename = file_item.filename
+            if not original_filename:
+                self.send_json_response({
+                    "success": False,
+                    "error": "No filename provided"
+                }, status=400)
+                return
+
+            safe_filename = secure_filename(original_filename)
+
+            # Check for common image extensions
+            allowed_extensions = {'.jpg', '.jpeg', '.png', '.tif', '.tiff', '.gif', '.bmp'}
+            file_ext = Path(safe_filename).suffix.lower()
+            if file_ext not in allowed_extensions:
+                self.send_json_response({
+                    "success": False,
+                    "error": f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"
+                }, status=400)
+                return
+
+            # Save the file
+            output_path = INPUT_DIR / safe_filename
+
+            # Check if file already exists
+            if output_path.exists():
+                self.send_json_response({
+                    "success": False,
+                    "error": f"File '{safe_filename}' already exists"
+                }, status=409)
+                return
+
+            # Write file to disk
+            with open(output_path, 'wb') as f:
+                f.write(file_item.file.read())
+
+            # Return success response
+            self.send_json_response({
+                "success": True,
+                "filename": safe_filename,
+                "path": str(output_path.relative_to(BASE_DIR))
+            })
+
+        except Exception as e:
+            self.send_json_response({
+                "success": False,
+                "error": str(e)
+            }, status=500)
+
+    def handle_list_input_files(self):
+        """List all files in the input directory."""
+        try:
+            # Get list of files
+            files = []
+            if INPUT_DIR.exists():
+                for filepath in sorted(INPUT_DIR.iterdir()):
+                    if filepath.is_file():
+                        # Get file stats
+                        stat = filepath.stat()
+                        files.append({
+                            "filename": filepath.name,
+                            "path": str(filepath.relative_to(BASE_DIR)),
+                            "size": stat.st_size,
+                            "modified": stat.st_mtime
+                        })
+
+            self.send_json_response({
+                "success": True,
+                "files": files,
+                "count": len(files)
+            })
 
         except Exception as e:
             self.send_json_response({

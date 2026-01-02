@@ -19,26 +19,47 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+# Import canonical source mappings from constants
+try:
+    from constants import (
+        SOURCE_SHORT_CODES,
+        ML_MAP_SOURCES,
+        BUILDINGS_MERGED,
+        BUILDINGS_EXPORT,
+        to_short_code,
+        is_valid_source,
+    )
+except ImportError:
+    # Fallback for running directly
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from constants import (
+        SOURCE_SHORT_CODES,
+        ML_MAP_SOURCES,
+        BUILDINGS_MERGED,
+        BUILDINGS_EXPORT,
+        to_short_code,
+        is_valid_source,
+    )
 
-# Source code mappings: full name → short code
-SOURCE_CODES = {
-    'sefrak': 'sef',
-    'trondheim_kommune': 'tk',
-    'osm': 'osm',
-    'matrikkelen': 'mat',
-    'ml_kartverket_1880': 'ml',
-    'ml_kartverket_1904': 'ml',
-    'ml_aerial_1947': 'ml',
-    'ml_aerial_1964': 'ml',
-}
 
-# ML source codes: full name → map identifier
-ML_SOURCE_CODES = {
-    'ml_kartverket_1880': 'kv1880',
-    'ml_kartverket_1904': 'kv1904',
-    'ml_aerial_1947': 'air1947',
-    'ml_aerial_1964': 'air1964',
-}
+def get_source_code(src: str) -> str:
+    """Get short code for a source, handling ML sources specially.
+
+    Args:
+        src: Source ID (e.g., 'sefrak', 'ml_kartverket_1880')
+
+    Returns:
+        Short code (e.g., 'sef', 'ml')
+    """
+    # ML sources all map to 'ml'
+    if src.startswith('ml_'):
+        return 'ml'
+    # Use canonical mapping
+    return SOURCE_SHORT_CODES.get(src, src)
+
+
+# ML source codes imported from constants.ML_MAP_SOURCES
+# (Centralized mapping for ml_kartverket_1880 -> kv1880, etc.)
 
 
 def generate_bid(src: str, src_id: str) -> str:
@@ -52,7 +73,7 @@ def generate_bid(src: str, src_id: str) -> str:
     Returns:
         Compact ID (e.g., 'sef-12345', 'osm-123456')
     """
-    short_src = SOURCE_CODES.get(src, src)
+    short_src = get_source_code(src)
 
     # Clean up source ID
     # Remove common prefixes and clean separators
@@ -84,12 +105,12 @@ def transform_feature(feature: Dict) -> Dict:
     # Build frontend properties
     frontend_props = {
         'bid': bid,
-        'src': SOURCE_CODES.get(src, src),
+        'src': get_source_code(src),
     }
 
     # Add src_all if multiple sources contributed
     if len(src_all) > 1:
-        frontend_props['src_all'] = [SOURCE_CODES.get(s, s) for s in src_all]
+        frontend_props['src_all'] = [get_source_code(s) for s in src_all]
 
     # Copy core temporal fields
     if 'sd' in props:
@@ -99,9 +120,32 @@ def transform_feature(feature: Dict) -> Dict:
     if 'ev' in props:
         frontend_props['ev'] = props['ev']
 
+    # Add date source (where the construction year came from)
+    # This is separate from geometry source - in OSM-centric mode, geometry is always OSM
+    # but the date can come from various sources (tk, finn, sefrak, etc.)
+    sd_src = props.get('sd_src')
+    if sd_src:
+        frontend_props['sd_src'] = get_source_code(sd_src)
+        # Also update src to reflect date source for filtering
+        frontend_props['src'] = get_source_code(sd_src)
+    else:
+        # For inherited dates (no explicit source), mark as 'inh' (inherited)
+        sd_method = props.get('sd_method')
+        if sd_method in ('median', 'fallback'):
+            frontend_props['sd_src'] = 'inh'
+            # Include donor IDs for highlighting in debug mode
+            donor_ids = props.get('sd_donor_ids')
+            if donor_ids:
+                # Convert donor IDs to frontend bid format (osm-xxxxx)
+                frontend_props['donors'] = [f"osm-{did.replace('way/', '').replace('relation/', '')}"
+                                           for did in donor_ids if did]
+        else:
+            # Default to geometry source if no date source specified
+            frontend_props['sd_src'] = frontend_props['src']
+
     # Copy ML-specific fields
     if src.startswith('ml_'):
-        frontend_props['ml_src'] = ML_SOURCE_CODES.get(src, src)
+        frontend_props['ml_src'] = ML_MAP_SOURCES.get(src, src)
         if 'mlc' in props:
             frontend_props['mlc'] = props['mlc']
 
@@ -300,14 +344,14 @@ def main():
     parser.add_argument(
         '--input', '-i',
         type=Path,
-        default=Path(__file__).parent.parent.parent / 'data' / 'merged' / 'buildings_merged.geojson',
-        help='Path to merged buildings GeoJSON (default: data/merged/buildings_merged.geojson)'
+        default=BUILDINGS_MERGED,
+        help=f'Path to merged buildings GeoJSON (default: {BUILDINGS_MERGED})'
     )
     parser.add_argument(
         '--output', '-o',
         type=Path,
-        default=Path(__file__).parent.parent.parent / 'data' / 'export' / 'buildings.geojson',
-        help='Path to write frontend GeoJSON (default: data/export/buildings.geojson)'
+        default=BUILDINGS_EXPORT,
+        help=f'Path to write frontend GeoJSON (default: {BUILDINGS_EXPORT})'
     )
     parser.add_argument(
         '--no-stats',

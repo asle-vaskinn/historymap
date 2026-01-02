@@ -233,7 +233,7 @@ def create_train_val_test_datasets(
     test_split: float = 0.1,
     normalize: str = 'imagenet',
     seed: int = 42
-) -> Tuple[MapSegmentationDataset, MapSegmentationDataset, MapSegmentationDataset]:
+) -> Tuple[MapSegmentationDataset, MapSegmentationDataset, Optional[MapSegmentationDataset]]:
     """
     Create train/val/test datasets from a single directory.
 
@@ -252,12 +252,12 @@ def create_train_val_test_datasets(
         data_dir: Root directory containing images/ and masks/ subdirs
         train_split: Fraction of data for training
         val_split: Fraction of data for validation
-        test_split: Fraction of data for testing
+        test_split: Fraction of data for testing (0 = no test set)
         normalize: Normalization strategy
         seed: Random seed for reproducibility
 
     Returns:
-        train_dataset, val_dataset, test_dataset
+        train_dataset, val_dataset, test_dataset (test_dataset may be None if test_split=0)
     """
     data_dir = Path(data_dir)
     images_dir = data_dir / 'images'
@@ -279,7 +279,7 @@ def create_train_val_test_datasets(
 
     train_indices = indices[:n_train]
     val_indices = indices[n_train:n_train + n_val]
-    test_indices = indices[n_train + n_val:]
+    test_indices = indices[n_train + n_val:] if test_split > 0 else np.array([], dtype=int)
 
     # Create temporary directories for splits (symlinks would be better in production)
     import tempfile
@@ -305,7 +305,6 @@ def create_train_val_test_datasets(
 
     train_img_dir, train_mask_dir = create_split_dirs('train', train_indices)
     val_img_dir, val_mask_dir = create_split_dirs('val', val_indices)
-    test_img_dir, test_mask_dir = create_split_dirs('test', test_indices)
 
     # Create datasets
     train_dataset = MapSegmentationDataset(
@@ -318,10 +317,14 @@ def create_train_val_test_datasets(
         augment=False, normalize=normalize, split='val'
     )
 
-    test_dataset = MapSegmentationDataset(
-        test_img_dir, test_mask_dir,
-        augment=False, normalize=normalize, split='test'
-    )
+    # Only create test dataset if test_split > 0
+    test_dataset = None
+    if test_split > 0 and len(test_indices) > 0:
+        test_img_dir, test_mask_dir = create_split_dirs('test', test_indices)
+        test_dataset = MapSegmentationDataset(
+            test_img_dir, test_mask_dir,
+            augment=False, normalize=normalize, split='test'
+        )
 
     return train_dataset, val_dataset, test_dataset
 

@@ -47,7 +47,7 @@ except ImportError:
 
 # Import constants
 try:
-    from scripts.constants import ROAD_BUFFER_M, ROAD_BUILDING_OFFSET, ROAD_FALLBACK_YEAR
+    from scripts.constants import ROAD_BUFFER_M, ROAD_BUILDING_OFFSET, ROAD_FALLBACK_YEAR, GEO
     ROAD_OFFSET_YEARS = ROAD_BUILDING_OFFSET  # Alias for internal use
 except ImportError:
     # Fallback to default values if constants not available
@@ -55,6 +55,12 @@ except ImportError:
     ROAD_BUILDING_OFFSET = 2
     ROAD_OFFSET_YEARS = 2
     ROAD_FALLBACK_YEAR = 2000
+    # Fallback GeoContext
+    class _FallbackGeo:
+        avg_meters_per_degree = 80000
+        def meters_to_degrees(self, m): return m / 80000
+        def degrees_to_meters(self, d): return d * 80000
+    GEO = _FallbackGeo()
 
 
 def extract_map_year(src: str) -> Optional[int]:
@@ -143,9 +149,8 @@ def find_nearby_buildings(
         if not road_shape.is_valid:
             return []
 
-        # Convert buffer from meters to degrees (approximate at 63°N)
-        # 1 degree latitude ≈ 111km, 1 degree longitude ≈ 50km at 63°N
-        buffer_deg = buffer_m / 80000
+        # Convert buffer from meters to degrees using GeoContext
+        buffer_deg = GEO.meters_to_degrees(buffer_m)
 
         # Buffer the road
         buffered = road_shape.buffer(buffer_deg)

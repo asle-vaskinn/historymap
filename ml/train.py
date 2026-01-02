@@ -154,15 +154,19 @@ def create_dataloaders(config):
             pin_memory=config['data']['pin_memory']
         )
 
-        test_loader = DataLoader(
-            test_dataset,
-            batch_size=config['training']['batch_size'],
-            shuffle=False,
-            num_workers=config['data']['num_workers'],
-            pin_memory=config['data']['pin_memory']
-        )
+        # Test loader is optional (test_dataset may be None if test_split=0)
+        test_loader = None
+        if test_dataset is not None:
+            test_loader = DataLoader(
+                test_dataset,
+                batch_size=config['training']['batch_size'],
+                shuffle=False,
+                num_workers=config['data']['num_workers'],
+                pin_memory=config['data']['pin_memory']
+            )
 
-        logging.info(f"Dataset sizes - Train: {len(train_dataset)}, Val: {len(val_dataset)}, Test: {len(test_dataset)}")
+        test_size = len(test_dataset) if test_dataset else 0
+        logging.info(f"Dataset sizes - Train: {len(train_dataset)}, Val: {len(val_dataset)}, Test: {test_size}")
 
         return train_loader, val_loader, test_loader
     else:
@@ -464,18 +468,21 @@ def train(config, resume_from=None):
     logger.info(f"Best validation IoU: {best_metric:.4f}")
     logger.info("=" * 80)
 
-    # Evaluate on test set
-    logger.info("\nEvaluating on test set...")
-    model.load_state_dict(torch.load(config['paths']['best_model'], weights_only=False)['model_state_dict'])
-    test_metrics = evaluate(model, test_loader, device)
+    # Evaluate on test set (if available)
+    if test_loader is not None and len(test_loader) > 0:
+        logger.info("\nEvaluating on test set...")
+        model.load_state_dict(torch.load(config['paths']['best_model'], weights_only=False)['model_state_dict'])
+        test_metrics = evaluate(model, test_loader, device)
 
-    logger.info("Test Set Results:")
-    logger.info(f"  Mean IoU: {test_metrics['mean_iou']:.4f}")
-    logger.info(f"  Pixel Accuracy: {test_metrics['pixel_accuracy']:.4f}")
+        logger.info("Test Set Results:")
+        logger.info(f"  Mean IoU: {test_metrics['mean_iou']:.4f}")
+        logger.info(f"  Pixel Accuracy: {test_metrics['pixel_accuracy']:.4f}")
 
-    for i, class_name in config['class_names'].items():
-        if i in test_metrics['class_iou']:
-            logger.info(f"  {class_name} IoU: {test_metrics['class_iou'][i]:.4f}")
+        for i, class_name in config['class_names'].items():
+            if i in test_metrics['class_iou']:
+                logger.info(f"  {class_name} IoU: {test_metrics['class_iou'][i]:.4f}")
+    else:
+        logger.info("\nNo test set configured - skipping test evaluation")
 
     return best_metric
 

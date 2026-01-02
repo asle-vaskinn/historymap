@@ -1,0 +1,102 @@
+# Training Configuration for Water Segmentation
+# Simplified config focusing on water class (class 3)
+
+model:
+  encoder: resnet34
+  pretrained: true
+  classes: 5  # Keep all classes for compatibility
+
+training:
+  epochs: 30  # Fewer epochs for initial testing
+  batch_size: 8  # Smaller batch for limited data
+  learning_rate: 0.001
+  optimizer: adam
+  weight_decay: 0.0001
+  loss: dice
+
+  scheduler:
+    type: reduce_on_plateau
+    mode: max
+    factor: 0.5
+    patience: 5
+    min_lr: 0.000001
+
+  early_stopping:
+    enabled: true
+    patience: 10
+    metric: val_iou
+    mode: max
+
+  mixed_precision: true
+  grad_clip: 1.0
+  save_freq: 5
+  save_best_only: true
+
+data:
+  train_split: 0.8
+  val_split: 0.2
+  test_split: 0.0  # No test set for now
+
+  image_size: 512
+  normalize: true
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]
+
+  augmentation:
+    enabled: true
+    horizontal_flip: 0.5
+    vertical_flip: 0.5
+    rotation: 15
+    scale: [0.9, 1.1]
+    brightness: 0.2
+    contrast: 0.2
+    saturation: 0.1
+    hue: 0.05
+
+  # Higher weight for water class since it's minority
+  class_weights: [0.1, 0.5, 0.5, 2.0, 0.5]  # bg, building, road, water, forest
+
+  num_workers: 4
+  pin_memory: true
+
+paths:
+  # Water training data from bootstrap (combined years)
+  data_dir: data/training_water/combined
+
+  checkpoint_dir: models/checkpoints
+  log_dir: results/training_logs
+  best_model: models/checkpoints/water_model.pth
+  last_checkpoint: models/checkpoints/water_last.pth
+
+logging:
+  console_level: INFO
+  file_level: DEBUG
+  log_file: true
+  use_tqdm: true
+  print_freq: 10
+  val_freq: 1
+
+device: auto
+seed: 42
+
+metrics:
+  compute_iou: true
+  compute_accuracy: true
+  compute_confusion_matrix: true
+  iou_threshold: 0.5
+
+class_names:
+  0: background
+  1: building
+  2: road
+  3: water
+  4: forest
+
+vectorize:
+  separate_classes: true
+  classes_to_export:
+    - water
+  output_dirs:
+    water: water/
+  min_area_m2: 50  # Larger minimum for water
+  simplify_tolerance: 2.0
