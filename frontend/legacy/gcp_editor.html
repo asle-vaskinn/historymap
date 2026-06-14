@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GCP Editor - Ground Control Points</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            background: #16213e;
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            border-bottom: 1px solid #0f3460;
+        }
+
+        header h1 {
+            font-size: 1.2rem;
+            color: #4ecca3;
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .header-controls input,
+        .header-controls select {
+            padding: 6px 10px;
+            border: 1px solid #0f3460;
+            border-radius: 4px;
+            background: #1a1a2e;
+            color: #eee;
+            font-size: 0.85rem;
+        }
+
+        .header-controls label {
+            font-size: 0.85rem;
+            color: #aaa;
+        }
+
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #4ecca3;
+            color: #1a1a2e;
+        }
+
+        .btn-primary:hover {
+            background: #3db892;
+        }
+
+        .btn-secondary {
+            background: #0f3460;
+            color: #eee;
+        }
+
+        .btn-secondary:hover {
+            background: #1a4a7a;
+        }
+
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+
+        .main-container {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #0f3460;
+        }
+
+        .panel:last-child {
+            border-right: none;
+        }
+
+        .panel-header {
+            background: #16213e;
+            padding: 10px 15px;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9rem;
+        }
+
+        .panel-header .hint {
+            font-weight: normal;
+            color: #888;
+            font-size: 0.8rem;
+        }
+
+        .panel-content {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #historicalMap {
+            width: 100%;
+            height: 100%;
+            background: #2c3e50;
+            cursor: crosshair;
+        }
+
+        #modernMap {
+            width: 100%;
+            height: 100%;
+        }
+
+        .sidebar {
+            width: 320px;
+            background: #16213e;
+            display: flex;
+            flex-direction: column;
+            border-left: 1px solid #0f3460;
+        }
+
+        .sidebar-section {
+            padding: 15px;
+            border-bottom: 1px solid #0f3460;
+        }
+
+        .sidebar-section h3 {
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+            color: #4ecca3;
+        }
+
+        .gcp-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .gcp-item {
+            background: #1a1a2e;
+            border: 1px solid #0f3460;
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .gcp-item:hover {
+            border-color: #4ecca3;
+        }
+
+        .gcp-item.selected {
+            border-color: #4ecca3;
+            background: #1f2f4a;
+        }
+
+        .gcp-item.incomplete {
+            border-left: 3px solid #e74c3c;
+        }
+
+        .gcp-item.complete {
+            border-left: 3px solid #4ecca3;
+        }
+
+        .gcp-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+
+        .gcp-item-id {
+            font-weight: 600;
+            color: #4ecca3;
+        }
+
+        .gcp-item-status {
+            font-size: 0.75rem;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+
+        .gcp-item-status.complete {
+            background: #1d4e3e;
+            color: #4ecca3;
+        }
+
+        .gcp-item-status.incomplete {
+            background: #4a1f1f;
+            color: #e74c3c;
+        }
+
+        .gcp-item-coords {
+            font-size: 0.8rem;
+            color: #888;
+            font-family: monospace;
+        }
+
+        .gcp-item-actions {
+            margin-top: 8px;
+            display: flex;
+            gap: 5px;
+        }
+
+        .gcp-item-actions button {
+            padding: 4px 8px;
+            font-size: 0.75rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+        }
+
+        .empty-state p {
+            margin-bottom: 10px;
+        }
+
+        .status-bar {
+            background: #0f3460;
+            padding: 8px 15px;
+            font-size: 0.8rem;
+            color: #aaa;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .workflow-hint {
+            background: #1f3a5f;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-size: 0.85rem;
+            line-height: 1.4;
+        }
+
+        .workflow-hint strong {
+            color: #4ecca3;
+        }
+
+        .step-indicator {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #0f3460;
+            text-align: center;
+            line-height: 20px;
+            margin-right: 5px;
+            font-size: 0.75rem;
+        }
+
+        .step-indicator.active {
+            background: #4ecca3;
+            color: #1a1a2e;
+        }
+
+        .marker-historical {
+            width: 20px;
+            height: 20px;
+            border: 3px solid #e74c3c;
+            border-radius: 50%;
+            background: rgba(231, 76, 60, 0.3);
+            transform: translate(-50%, -50%);
+        }
+
+        .marker-historical.complete {
+            border-color: #4ecca3;
+            background: rgba(78, 204, 163, 0.3);
+        }
+
+        .marker-historical.selected {
+            border-color: #f1c40f;
+            background: rgba(241, 196, 15, 0.4);
+            box-shadow: 0 0 10px #f1c40f;
+        }
+
+        .marker-label {
+            position: absolute;
+            background: #1a1a2e;
+            color: #fff;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+            white-space: nowrap;
+            transform: translate(10px, -50%);
+            pointer-events: none;
+        }
+
+        /* File drop zone */
+        .drop-zone {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(26, 26, 46, 0.95);
+            z-index: 1000;
+        }
+
+        .drop-zone-content {
+            text-align: center;
+            padding: 40px;
+        }
+
+        .drop-zone-content h2 {
+            color: #4ecca3;
+            margin-bottom: 15px;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Zoom controls for historical map */
+        .zoom-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .zoom-controls button {
+            width: 36px;
+            height: 36px;
+            font-size: 1.2rem;
+            padding: 0;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>GCP Editor</h1>
+        <div class="header-controls">
+            <label>Map ID:</label>
+            <input type="text" id="mapId" placeholder="trondheim_1880" style="width: 150px;">
+            <label>Year:</label>
+            <input type="number" id="mapYear" placeholder="1880" style="width: 80px;">
+            <label>CRS:</label>
+            <select id="mapCrs">
+                <option value="EPSG:4326">EPSG:4326 (WGS84)</option>
+                <option value="EPSG:25832">EPSG:25832 (UTM 32N)</option>
+                <option value="EPSG:25833">EPSG:25833 (UTM 33N)</option>
+            </select>
+        </div>
+        <div style="flex: 1;"></div>
+        <button class="btn-secondary" onclick="loadGCPFile()">Load GCPs</button>
+        <button class="btn-primary" onclick="saveGCPs()">Save GCPs</button>
+    </header>
+
+    <div class="main-container">
+        <!-- Historical Map Panel -->
+        <div class="panel">
+            <div class="panel-header">
+                <span>Historical Map</span>
+                <span class="hint">Click to place GCP</span>
+            </div>
+            <div class="panel-content">
+                <div id="dropZone" class="drop-zone">
+                    <div class="drop-zone-content">
+                        <h2>Drop Historical Map Image Here</h2>
+                        <p>or</p>
+                        <button class="btn-primary" onclick="document.getElementById('fileInput').click()">
+                            Choose File
+                        </button>
+                        <input type="file" id="fileInput" accept="image/*" style="display: none;">
+                    </div>
+                </div>
+                <canvas id="historicalMap"></canvas>
+                <div class="zoom-controls hidden" id="zoomControls">
+                    <button class="btn-secondary" onclick="zoomIn()">+</button>
+                    <button class="btn-secondary" onclick="zoomOut()">-</button>
+                    <button class="btn-secondary" onclick="fitToView()">Fit</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modern Map Panel -->
+        <div class="panel">
+            <div class="panel-header">
+                <span>Modern Map (Reference)</span>
+                <span class="hint">Click to set coordinates</span>
+            </div>
+            <div class="panel-content">
+                <div id="modernMap"></div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-section">
+                <div class="workflow-hint">
+                    <p><span class="step-indicator" id="step1">1</span> Click on <strong>Historical Map</strong> to place point</p>
+                    <p><span class="step-indicator" id="step2">2</span> Click same location on <strong>Modern Map</strong></p>
+                    <p>Repeat for 4+ points (corners, landmarks)</p>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Ground Control Points</h3>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span id="gcpCount">0 GCPs (0 complete)</span>
+                    <button class="btn-danger" onclick="clearAllGCPs()" style="padding: 4px 8px; font-size: 0.75rem;">Clear All</button>
+                </div>
+            </div>
+
+            <div class="gcp-list" id="gcpList">
+                <div class="empty-state">
+                    <p>No GCPs yet</p>
+                    <p style="font-size: 0.8rem;">Click on the historical map to add points</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="status-bar">
+        <span id="statusText">Load a historical map image to begin</span>
+        <span id="cursorCoords"></span>
+    </div>
+
+    <script>
+        // State
+        let historicalImage = null;
+        let gcps = [];
+        let selectedGcpIndex = null;
+        let gcpCounter = 0;
+        let waitingForModernClick = false;
+
+        // Canvas state
+        let canvas, ctx;
+        let zoom = 1;
+        let panX = 0, panY = 0;
+        let isDragging = false;
+        let dragStart = { x: 0, y: 0 };
+        let lastPan = { x: 0, y: 0 };
+
+        // Leaflet map
+        let modernMap;
+        let modernMarkers = {};
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            initCanvas();
+            initModernMap();
+            initFileHandling();
+            initKeyboardShortcuts();
+
+            // Set default values for Trondheim
+            document.getElementById('mapYear').value = '1880';
+
+            // Try to get map ID from URL params
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('id')) {
+                document.getElementById('mapId').value = params.get('id');
+            }
+        });
+
+        function initCanvas() {
+            canvas = document.getElementById('historicalMap');
+            ctx = canvas.getContext('2d');
+
+            canvas.addEventListener('click', onCanvasClick);
+            canvas.addEventListener('mousedown', onCanvasMouseDown);
+            canvas.addEventListener('mousemove', onCanvasMouseMove);
+            canvas.addEventListener('mouseup', onCanvasMouseUp);
+            canvas.addEventListener('mouseleave', onCanvasMouseUp);
+            canvas.addEventListener('wheel', onCanvasWheel);
+
+            // Resize handler
+            new ResizeObserver(() => {
+                if (historicalImage) {
+                    resizeCanvas();
+                    render();
+                }
+            }).observe(canvas.parentElement);
+        }
+
+        function initModernMap() {
+            modernMap = L.map('modernMap').setView([63.43, 10.40], 13);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(modernMap);
+
+            modernMap.on('click', onModernMapClick);
+        }
+
+        function initFileHandling() {
+            const dropZone = document.getElementById('dropZone');
+            const fileInput = document.getElementById('fileInput');
+
+            // Drag and drop
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.style.background = 'rgba(78, 204, 163, 0.2)';
+            });
+
+            dropZone.addEventListener('dragleave', () => {
+                dropZone.style.background = 'rgba(26, 26, 46, 0.95)';
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                const file = e.dataTransfer.files[0];
+                if (file && file.type.startsWith('image/')) {
+                    loadImage(file);
+                }
+            });
+
+            // File input
+            fileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    loadImage(file);
+                }
+            });
+        }
+
+        function initKeyboardShortcuts() {
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Delete' || e.key === 'Backspace') {
+                    if (selectedGcpIndex !== null && !e.target.matches('input')) {
+                        deleteGCP(selectedGcpIndex);
+                    }
+                }
+                if (e.ctrlKey && e.key === 's') {
+                    e.preventDefault();
+                    saveGCPs();
+                }
+                if (e.key === 'Escape') {
+                    waitingForModernClick = false;
+                    updateStepIndicators();
+                    setStatus('Cancelled - click on historical map to place new GCP');
+                }
+            });
+        }
+
+        function loadImage(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    historicalImage = img;
+
+                    // Extract map ID from filename
+                    const name = file.name.replace(/\.[^/.]+$/, '');
+                    document.getElementById('mapId').value = name;
+
+                    // Try to extract year
+                    const yearMatch = name.match(/(18\d{2}|19\d{2}|20\d{2})/);
+                    if (yearMatch) {
+                        document.getElementById('mapYear').value = yearMatch[1];
+                    }
+
+                    document.getElementById('dropZone').classList.add('hidden');
+                    document.getElementById('zoomControls').classList.remove('hidden');
+
+                    resizeCanvas();
+                    fitToView();
+                    setStatus(`Loaded: ${file.name} (${img.width}x${img.height})`);
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function resizeCanvas() {
+            const container = canvas.parentElement;
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+        }
+
+        function fitToView() {
+            if (!historicalImage) return;
+
+            const scaleX = canvas.width / historicalImage.width;
+            const scaleY = canvas.height / historicalImage.height;
+            zoom = Math.min(scaleX, scaleY) * 0.95;
+
+            panX = (canvas.width - historicalImage.width * zoom) / 2;
+            panY = (canvas.height - historicalImage.height * zoom) / 2;
+
+            render();
+        }
+
+        function zoomIn() {
+            zoom *= 1.25;
+            render();
+        }
+
+        function zoomOut() {
+            zoom *= 0.8;
+            render();
+        }
+
+        function render() {
+            if (!ctx) return;
+
+            ctx.fillStyle = '#2c3e50';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (!historicalImage) return;
+
+            // Draw image
+            ctx.save();
+            ctx.translate(panX, panY);
+            ctx.scale(zoom, zoom);
+            ctx.drawImage(historicalImage, 0, 0);
+            ctx.restore();
+
+            // Draw GCP markers
+            gcps.forEach((gcp, index) => {
+                const x = gcp.pixelX * zoom + panX;
+                const y = gcp.pixelY * zoom + panY;
+
+                const isSelected = index === selectedGcpIndex;
+                const isComplete = gcp.geoX !== null && gcp.geoY !== null;
+
+                // Draw marker
+                ctx.beginPath();
+                ctx.arc(x, y, 10, 0, Math.PI * 2);
+
+                if (isSelected) {
+                    ctx.strokeStyle = '#f1c40f';
+                    ctx.fillStyle = 'rgba(241, 196, 15, 0.3)';
+                    ctx.lineWidth = 3;
+                } else if (isComplete) {
+                    ctx.strokeStyle = '#4ecca3';
+                    ctx.fillStyle = 'rgba(78, 204, 163, 0.3)';
+                    ctx.lineWidth = 2;
+                } else {
+                    ctx.strokeStyle = '#e74c3c';
+                    ctx.fillStyle = 'rgba(231, 76, 60, 0.3)';
+                    ctx.lineWidth = 2;
+                }
+
+                ctx.fill();
+                ctx.stroke();
+
+                // Draw crosshair
+                ctx.beginPath();
+                ctx.moveTo(x - 15, y);
+                ctx.lineTo(x + 15, y);
+                ctx.moveTo(x, y - 15);
+                ctx.lineTo(x, y + 15);
+                ctx.stroke();
+
+                // Draw label
+                ctx.fillStyle = '#fff';
+                ctx.font = '12px sans-serif';
+                ctx.fillText(gcp.id, x + 15, y - 5);
+            });
+        }
+
+        function canvasToPixel(canvasX, canvasY) {
+            return {
+                x: (canvasX - panX) / zoom,
+                y: (canvasY - panY) / zoom
+            };
+        }
+
+        function onCanvasClick(e) {
+            if (!historicalImage) return;
+            if (isDragging) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const canvasX = e.clientX - rect.left;
+            const canvasY = e.clientY - rect.top;
+            const pixel = canvasToPixel(canvasX, canvasY);
+
+            // Check bounds
+            if (pixel.x < 0 || pixel.x >= historicalImage.width ||
+                pixel.y < 0 || pixel.y >= historicalImage.height) {
+                return;
+            }
+
+            // Check if clicking existing GCP
+            const clickedIndex = findGCPAt(pixel.x, pixel.y);
+
+            if (clickedIndex !== null) {
+                selectGCP(clickedIndex);
+            } else {
+                // Add new GCP
+                addGCP(pixel.x, pixel.y);
+            }
+        }
+
+        function onCanvasMouseDown(e) {
+            if (e.button === 1 || (e.button === 0 && e.altKey)) {
+                // Middle button or Alt+click for panning
+                isDragging = true;
+                dragStart = { x: e.clientX, y: e.clientY };
+                lastPan = { x: panX, y: panY };
+                canvas.style.cursor = 'grabbing';
+            }
+        }
+
+        function onCanvasMouseMove(e) {
+            if (isDragging) {
+                panX = lastPan.x + (e.clientX - dragStart.x);
+                panY = lastPan.y + (e.clientY - dragStart.y);
+                render();
+            }
+
+            // Update cursor coords
+            if (historicalImage) {
+                const rect = canvas.getBoundingClientRect();
+                const pixel = canvasToPixel(e.clientX - rect.left, e.clientY - rect.top);
+                if (pixel.x >= 0 && pixel.x < historicalImage.width &&
+                    pixel.y >= 0 && pixel.y < historicalImage.height) {
+                    document.getElementById('cursorCoords').textContent =
+                        `Pixel: (${Math.round(pixel.x)}, ${Math.round(pixel.y)})`;
+                }
+            }
+        }
+
+        function onCanvasMouseUp() {
+            isDragging = false;
+            canvas.style.cursor = 'crosshair';
+        }
+
+        function onCanvasWheel(e) {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+            const newZoom = zoom * zoomFactor;
+
+            // Zoom towards mouse position
+            panX = mouseX - (mouseX - panX) * (newZoom / zoom);
+            panY = mouseY - (mouseY - panY) * (newZoom / zoom);
+            zoom = newZoom;
+
+            render();
+        }
+
+        function findGCPAt(x, y, threshold = 20) {
+            const thresholdPx = threshold / zoom;
+
+            for (let i = gcps.length - 1; i >= 0; i--) {
+                const gcp = gcps[i];
+                const dx = Math.abs(gcp.pixelX - x);
+                const dy = Math.abs(gcp.pixelY - y);
+                if (dx < thresholdPx && dy < thresholdPx) {
+                    return i;
+                }
+            }
+            return null;
+        }
+
+        function addGCP(pixelX, pixelY) {
+            gcpCounter++;
+            const gcp = {
+                id: `GCP${gcpCounter}`,
+                pixelX: Math.round(pixelX),
+                pixelY: Math.round(pixelY),
+                geoX: null,
+                geoY: null,
+                description: ''
+            };
+
+            gcps.push(gcp);
+            selectedGcpIndex = gcps.length - 1;
+            waitingForModernClick = true;
+
+            updateGCPList();
+            updateStepIndicators();
+            render();
+
+            setStatus(`Added ${gcp.id} - now click the same location on the modern map`);
+        }
+
+        function selectGCP(index) {
+            selectedGcpIndex = index;
+            waitingForModernClick = true;
+
+            updateGCPList();
+            updateStepIndicators();
+            render();
+
+            const gcp = gcps[index];
+            if (gcp.geoX !== null && gcp.geoY !== null) {
+                modernMap.setView([gcp.geoY, gcp.geoX], 16);
+            }
+
+            setStatus(`Selected ${gcp.id} - click on modern map to update coordinates`);
+        }
+
+        function deleteGCP(index) {
+            const gcp = gcps[index];
+
+            // Remove modern map marker
+            if (modernMarkers[gcp.id]) {
+                modernMap.removeLayer(modernMarkers[gcp.id]);
+                delete modernMarkers[gcp.id];
+            }
+
+            gcps.splice(index, 1);
+
+            if (selectedGcpIndex === index) {
+                selectedGcpIndex = null;
+                waitingForModernClick = false;
+            } else if (selectedGcpIndex > index) {
+                selectedGcpIndex--;
+            }
+
+            updateGCPList();
+            updateStepIndicators();
+            render();
+
+            setStatus(`Deleted ${gcp.id}`);
+        }
+
+        function clearAllGCPs() {
+            if (gcps.length === 0) return;
+            if (!confirm(`Delete all ${gcps.length} GCPs?`)) return;
+
+            // Remove all modern markers
+            Object.values(modernMarkers).forEach(marker => {
+                modernMap.removeLayer(marker);
+            });
+            modernMarkers = {};
+
+            gcps = [];
+            gcpCounter = 0;
+            selectedGcpIndex = null;
+            waitingForModernClick = false;
+
+            updateGCPList();
+            updateStepIndicators();
+            render();
+
+            setStatus('Cleared all GCPs');
+        }
+
+        function onModernMapClick(e) {
+            if (!waitingForModernClick || selectedGcpIndex === null) {
+                setStatus('First click on historical map to place a point');
+                return;
+            }
+
+            const gcp = gcps[selectedGcpIndex];
+            gcp.geoX = e.latlng.lng;
+            gcp.geoY = e.latlng.lat;
+
+            // Update or create marker
+            if (modernMarkers[gcp.id]) {
+                modernMarkers[gcp.id].setLatLng(e.latlng);
+            } else {
+                const marker = L.circleMarker(e.latlng, {
+                    radius: 8,
+                    color: '#4ecca3',
+                    fillColor: '#4ecca3',
+                    fillOpacity: 0.5,
+                    weight: 2
+                }).addTo(modernMap);
+
+                marker.bindTooltip(gcp.id, { permanent: true, direction: 'right', offset: [10, 0] });
+                modernMarkers[gcp.id] = marker;
+            }
+
+            waitingForModernClick = false;
+
+            updateGCPList();
+            updateStepIndicators();
+            render();
+
+            const completeCount = gcps.filter(g => g.geoX !== null).length;
+            setStatus(`${gcp.id} complete! (${completeCount}/${gcps.length} GCPs done)`);
+        }
+
+        function updateGCPList() {
+            const list = document.getElementById('gcpList');
+            const completeCount = gcps.filter(g => g.geoX !== null && g.geoY !== null).length;
+
+            document.getElementById('gcpCount').textContent =
+                `${gcps.length} GCPs (${completeCount} complete)`;
+
+            if (gcps.length === 0) {
+                list.innerHTML = `
+                    <div class="empty-state">
+                        <p>No GCPs yet</p>
+                        <p style="font-size: 0.8rem;">Click on the historical map to add points</p>
+                    </div>
+                `;
+                return;
+            }
+
+            list.innerHTML = gcps.map((gcp, index) => {
+                const isComplete = gcp.geoX !== null && gcp.geoY !== null;
+                const isSelected = index === selectedGcpIndex;
+
+                return `
+                    <div class="gcp-item ${isComplete ? 'complete' : 'incomplete'} ${isSelected ? 'selected' : ''}"
+                         onclick="selectGCP(${index})">
+                        <div class="gcp-item-header">
+                            <span class="gcp-item-id">${gcp.id}</span>
+                            <span class="gcp-item-status ${isComplete ? 'complete' : 'incomplete'}">
+                                ${isComplete ? 'Complete' : 'Needs coords'}
+                            </span>
+                        </div>
+                        <div class="gcp-item-coords">
+                            Pixel: (${gcp.pixelX}, ${gcp.pixelY})<br>
+                            ${isComplete
+                                ? `Geo: (${gcp.geoX.toFixed(5)}, ${gcp.geoY.toFixed(5)})`
+                                : 'Geo: (click on modern map)'}
+                        </div>
+                        <div class="gcp-item-actions">
+                            <button class="btn-secondary" onclick="event.stopPropagation(); editGCP(${index})">Edit</button>
+                            <button class="btn-danger" onclick="event.stopPropagation(); deleteGCP(${index})">Delete</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function editGCP(index) {
+            const gcp = gcps[index];
+
+            const newId = prompt('GCP ID:', gcp.id);
+            if (newId !== null) gcp.id = newId;
+
+            const newLon = prompt('Longitude (X):', gcp.geoX || '');
+            if (newLon !== null && newLon !== '') {
+                gcp.geoX = parseFloat(newLon);
+            }
+
+            const newLat = prompt('Latitude (Y):', gcp.geoY || '');
+            if (newLat !== null && newLat !== '') {
+                gcp.geoY = parseFloat(newLat);
+            }
+
+            const newDesc = prompt('Description:', gcp.description);
+            if (newDesc !== null) gcp.description = newDesc;
+
+            // Update marker
+            if (gcp.geoX !== null && gcp.geoY !== null) {
+                if (modernMarkers[gcp.id]) {
+                    modernMarkers[gcp.id].setLatLng([gcp.geoY, gcp.geoX]);
+                } else {
+                    const marker = L.circleMarker([gcp.geoY, gcp.geoX], {
+                        radius: 8,
+                        color: '#4ecca3',
+                        fillColor: '#4ecca3',
+                        fillOpacity: 0.5,
+                        weight: 2
+                    }).addTo(modernMap);
+                    marker.bindTooltip(gcp.id, { permanent: true, direction: 'right', offset: [10, 0] });
+                    modernMarkers[gcp.id] = marker;
+                }
+            }
+
+            updateGCPList();
+            render();
+        }
+
+        function updateStepIndicators() {
+            const step1 = document.getElementById('step1');
+            const step2 = document.getElementById('step2');
+
+            if (waitingForModernClick) {
+                step1.classList.remove('active');
+                step2.classList.add('active');
+            } else {
+                step1.classList.add('active');
+                step2.classList.remove('active');
+            }
+        }
+
+        function setStatus(text) {
+            document.getElementById('statusText').textContent = text;
+        }
+
+        function saveGCPs() {
+            const mapId = document.getElementById('mapId').value || 'unknown';
+            const mapYear = parseInt(document.getElementById('mapYear').value) || 1900;
+            const crs = document.getElementById('mapCrs').value;
+
+            const data = {
+                version: '1.0',
+                map_id: mapId,
+                map_date: mapYear,
+                crs: crs,
+                source_file: historicalImage ? document.getElementById('mapId').value : '',
+                created: new Date().toISOString(),
+                gcps: gcps.map(gcp => ({
+                    id: gcp.id,
+                    pixel_x: gcp.pixelX,
+                    pixel_y: gcp.pixelY,
+                    geo_x: gcp.geoX,
+                    geo_y: gcp.geoY,
+                    description: gcp.description || ''
+                })),
+                notes: [
+                    `Save this file to: data/kartverket/gcps/${mapId}.gcp.json`,
+                    `Then run: python scripts/georeference_map.py --input data/kartverket/${mapYear}/raw/{image}.png --gcps data/kartverket/gcps/${mapId}.gcp.json --output data/kartverket/${mapYear}/georeferenced/{image}.tif`
+                ]
+            };
+
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${mapId}.gcp.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+
+            setStatus(`Saved ${gcps.length} GCPs to ${mapId}.gcp.json - save to data/kartverket/gcps/`);
+        }
+
+        function loadGCPFile() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json,.gcp.json';
+            input.onchange = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = JSON.parse(e.target.result);
+
+                        // Clear existing
+                        Object.values(modernMarkers).forEach(m => modernMap.removeLayer(m));
+                        modernMarkers = {};
+
+                        // Load metadata
+                        document.getElementById('mapId').value = data.map_id || '';
+                        document.getElementById('mapYear').value = data.map_date || '';
+                        document.getElementById('mapCrs').value = data.crs || 'EPSG:4326';
+
+                        // Load GCPs
+                        gcps = (data.gcps || []).map(g => ({
+                            id: g.id,
+                            pixelX: g.pixel_x,
+                            pixelY: g.pixel_y,
+                            geoX: g.geo_x,
+                            geoY: g.geo_y,
+                            description: g.description || ''
+                        }));
+
+                        gcpCounter = gcps.length;
+
+                        // Create modern map markers
+                        gcps.forEach(gcp => {
+                            if (gcp.geoX !== null && gcp.geoY !== null) {
+                                const marker = L.circleMarker([gcp.geoY, gcp.geoX], {
+                                    radius: 8,
+                                    color: '#4ecca3',
+                                    fillColor: '#4ecca3',
+                                    fillOpacity: 0.5,
+                                    weight: 2
+                                }).addTo(modernMap);
+                                marker.bindTooltip(gcp.id, { permanent: true, direction: 'right', offset: [10, 0] });
+                                modernMarkers[gcp.id] = marker;
+                            }
+                        });
+
+                        // Fit map to markers
+                        if (Object.keys(modernMarkers).length > 0) {
+                            const bounds = L.latLngBounds(
+                                gcps.filter(g => g.geoX && g.geoY).map(g => [g.geoY, g.geoX])
+                            );
+                            modernMap.fitBounds(bounds, { padding: [50, 50] });
+                        }
+
+                        updateGCPList();
+                        render();
+
+                        setStatus(`Loaded ${gcps.length} GCPs from ${file.name}`);
+                    } catch (err) {
+                        alert('Failed to load GCP file: ' + err.message);
+                    }
+                };
+                reader.readAsText(file);
+            };
+            input.click();
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,1736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Source Manager</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        header {
+            background: #16213e;
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            border-bottom: 1px solid #0f3460;
+        }
+        header h1 { font-size: 1.1rem; color: #4ecca3; }
+        select, input {
+            padding: 8px 12px;
+            border: 1px solid #0f3460;
+            border-radius: 4px;
+            background: #1a1a2e;
+            color: #eee;
+            font-size: 0.9rem;
+        }
+        select { min-width: 250px; }
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+        .btn-primary { background: #4ecca3; color: #1a1a2e; font-weight: 600; }
+        .btn-primary:hover { background: #3db892; }
+        .btn-secondary { background: #0f3460; color: #eee; }
+        .btn-secondary:hover { background: #1a4a7a; }
+        .btn-danger { background: #e74c3c; color: white; }
+        .btn-danger:hover { background: #c0392b; }
+        .main-container { flex: 1; display: flex; overflow: hidden; }
+        .panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #0f3460;
+        }
+        .panel:last-of-type { border-right: none; }
+        .panel-header {
+            background: #16213e;
+            padding: 8px 15px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .panel-header .hint { font-weight: normal; color: #888; font-size: 0.75rem; }
+        .panel-content { flex: 1; position: relative; overflow: hidden; }
+        #historicalMap {
+            width: 100%;
+            height: 100%;
+            background: #2c3e50;
+            cursor: crosshair;
+        }
+        #modernMap { width: 100%; height: 100%; }
+        .sidebar {
+            width: 280px;
+            background: #16213e;
+            display: flex;
+            flex-direction: column;
+            border-left: 1px solid #0f3460;
+        }
+        .sidebar-section {
+            padding: 12px;
+            border-bottom: 1px solid #0f3460;
+        }
+        .sidebar-section h3 {
+            font-size: 0.85rem;
+            margin-bottom: 8px;
+            color: #4ecca3;
+        }
+        .badge {
+            font-size: 0.65rem;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: 600;
+        }
+        .badge-wms { background: #3498db; color: white; }
+        .badge-image { background: #9b59b6; color: white; }
+        .badge-vector { background: #2ecc71; color: white; }
+        .badge-pending { background: #95a5a6; color: white; }
+        .badge-verified { background: #27ae60; color: white; }
+        .badge-georeferenced { background: #4ecca3; color: #1a1a2e; }
+        .gcp-list { flex: 1; overflow-y: auto; padding: 8px; }
+        .gcp-item {
+            background: #1a1a2e;
+            border: 1px solid #0f3460;
+            border-radius: 6px;
+            padding: 8px;
+            margin-bottom: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+        .gcp-item:hover { border-color: #4ecca3; }
+        .gcp-item.selected { border-color: #f1c40f; background: #1f2f4a; }
+        .gcp-item.incomplete { border-left: 3px solid #e74c3c; }
+        .gcp-item.complete { border-left: 3px solid #4ecca3; }
+        .gcp-id { font-weight: 600; color: #4ecca3; }
+        .gcp-coords { font-size: 0.75rem; color: #888; font-family: monospace; }
+        .gcp-actions { margin-top: 6px; display: flex; gap: 4px; }
+        .gcp-actions button { padding: 3px 8px; font-size: 0.7rem; }
+        .gcp-error { font-size: 0.7rem; font-weight: 600; padding: 2px 6px; border-radius: 3px; }
+        .error-good { background: #27ae60; color: white; }
+        .error-warn { background: #f39c12; color: white; }
+        .error-bad { background: #e74c3c; color: white; }
+        .gcp-marker-icon { width: 20px; height: 20px; margin-left: -10px; margin-top: -10px; }
+        .gcp-marker-dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: rgba(78, 204, 163, 0.6);
+            border: 2px solid #4ecca3;
+            cursor: move;
+            transition: transform 0.1s, background 0.1s;
+        }
+        .gcp-marker-dot:hover { background: rgba(78, 204, 163, 0.9); transform: scale(1.2); }
+        .gcp-marker-dot.selected { border-color: #f1c40f; background: rgba(241, 196, 15, 0.6); }
+        .status-bar {
+            background: #0f3460;
+            padding: 6px 15px;
+            font-size: 0.8rem;
+            color: #aaa;
+            display: flex;
+            justify-content: space-between;
+        }
+        .workflow {
+            background: #1f3a5f;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            line-height: 1.4;
+        }
+        .workflow strong { color: #4ecca3; }
+        .step { display: inline-block; width: 18px; height: 18px; border-radius: 50%; background: #0f3460; text-align: center; line-height: 18px; margin-right: 4px; font-size: 0.7rem; }
+        .step.active { background: #4ecca3; color: #1a1a2e; }
+        .zoom-controls {
+            position: absolute;
+            bottom: 15px;
+            left: 15px;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .zoom-controls button { width: 32px; height: 32px; font-size: 1rem; padding: 0; }
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #4ecca3;
+        }
+        .spacer { flex: 1; }
+
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal.show { display: flex; }
+        .modal-content {
+            background: #16213e;
+            border: 1px solid #0f3460;
+            border-radius: 8px;
+            padding: 20px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .modal-header h2 {
+            font-size: 1.2rem;
+            color: #4ecca3;
+        }
+        .modal-close {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+        }
+        .modal-close:hover { color: #eee; }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 0.85rem;
+            color: #aaa;
+        }
+        .form-group input[type="text"],
+        .form-group input[type="number"],
+        .form-group input[type="file"],
+        .form-group select {
+            width: 100%;
+        }
+        .form-group small {
+            display: block;
+            margin-top: 3px;
+            font-size: 0.75rem;
+            color: #888;
+        }
+        .modal-actions {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Source Manager</h1>
+        <select id="sourceDropdown" onchange="selectSource(this.value)" style="min-width: 280px;">
+            <option value="">-- Select source --</option>
+        </select>
+        <button class="btn-primary" onclick="showAddSourceModal()">+ Add</button>
+        <span id="sourceInfo" style="color: #888; font-size: 0.85rem;"></span>
+        <div class="spacer"></div>
+        <button class="btn-secondary" onclick="markAsVerified()" id="verifyBtn" style="display: none;">Mark as Verified</button>
+        <button class="btn-primary" onclick="runGeoreference()" style="background: #e67e22;">Run Georef</button>
+        <button class="btn-primary" onclick="publishSource()" id="publishBtn" style="display: none;">Publish</button>
+    </header>
+
+    <div class="main-container">
+        <div class="panel">
+            <div class="panel-header">
+                <span>Historical Map</span>
+                <span class="hint">Click to place, drag to move GCPs</span>
+            </div>
+            <div class="panel-content">
+                <div id="loadingHistorical" class="loading" style="display: none;">Loading map...</div>
+                <canvas id="historicalMap"></canvas>
+                <div class="zoom-controls" id="zoomControls" style="display: none;">
+                    <button class="btn-secondary" onclick="zoomIn()">+</button>
+                    <button class="btn-secondary" onclick="zoomOut()">-</button>
+                    <button class="btn-secondary" onclick="fitToView()">⊡</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">
+                <span>Modern Map</span>
+                <span class="hint">Click to set coords, drag markers to adjust</span>
+            </div>
+            <div class="panel-content" style="position: relative;">
+                <div id="modernMap"></div>
+                <div id="overlayControls" style="display: none; position: absolute; top: 10px; right: 10px; z-index: 1000; background: rgba(22, 33, 62, 0.9); padding: 8px 12px; border-radius: 6px; align-items: center; gap: 10px;">
+                    <label style="display: flex; align-items: center; gap: 4px; font-size: 0.8rem; cursor: pointer; color: #eee;">
+                        <input type="checkbox" id="overlayToggle" onchange="toggleOverlay()">
+                        Overlay
+                    </label>
+                    <input type="range" id="overlayOpacity" min="0" max="100" value="50"
+                           style="width: 80px;" oninput="setOverlayOpacity(this.value / 100)">
+                    <label style="display: flex; align-items: center; gap: 4px; font-size: 0.8rem; cursor: pointer; color: #eee; border-left: 1px solid #0f3460; padding-left: 10px;">
+                        <input type="checkbox" id="linkToggle" onchange="toggleLinkedView()">
+                        Link views
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar">
+            <div class="sidebar-section" id="gcpSection" style="display: none;">
+                <div class="workflow">
+                    <p><span class="step" id="step1">1</span> Click <strong>Historical</strong> to place point</p>
+                    <p><span class="step" id="step2">2</span> Click <strong>Modern</strong> for coordinates</p>
+                    <p style="margin-top: 5px; color: #888;">Need 4+ points for good accuracy</p>
+                </div>
+            </div>
+            <div class="sidebar-section" id="gcpHeader" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h3>GCPs (<span id="gcpCount">0</span>)</h3>
+                    <button class="btn-danger" onclick="clearAllGCPs()" style="padding: 3px 8px; font-size: 0.7rem;">Clear</button>
+                </div>
+            </div>
+            <div class="gcp-list" id="gcpList" style="display: none;">
+            </div>
+        </div>
+    </div>
+
+    <div class="status-bar">
+        <span id="statusText">Loading sources...</span>
+        <span id="rmsDisplay" style="font-weight: 600;"></span>
+        <span id="cursorCoords"></span>
+    </div>
+
+    <!-- Add Source Modal -->
+    <div id="addSourceModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add Map Source</h2>
+                <button class="modal-close" onclick="hideAddSourceModal()">&times;</button>
+            </div>
+
+            <form id="addSourceForm" onsubmit="submitAddSource(event)">
+                <div class="form-group">
+                    <label for="sourceName">Name *</label>
+                    <input type="text" id="sourceName" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="sourceType">Type *</label>
+                    <select id="sourceType" required onchange="updateSourceFormFields()">
+                        <option value="">-- Select type --</option>
+                        <option value="wms">WMS Layer</option>
+                        <option value="vector-style">Vector Style (MapLibre GL)</option>
+                        <option value="image">Local Image</option>
+                    </select>
+                </div>
+
+                <!-- WMS fields -->
+                <div id="wmsFields" style="display: none;">
+                    <div class="form-group">
+                        <label for="wmsUrl">WMS URL *</label>
+                        <input type="text" id="wmsUrl">
+                        <small>Example: /wms/geonorge/wms.historiskekart</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="wmsLayer">Layer Name *</label>
+                        <input type="text" id="wmsLayer">
+                        <small>Example: amt1</small>
+                    </div>
+                </div>
+
+                <!-- Vector style fields -->
+                <div id="vectorFields" style="display: none;">
+                    <div class="form-group">
+                        <label for="vectorUrl">Style URL *</label>
+                        <input type="text" id="vectorUrl">
+                        <small>Example: https://basemaps.cartocdn.com/gl/positron-gl-style/style.json</small>
+                    </div>
+                </div>
+
+                <!-- Image fields -->
+                <div id="imageFields" style="display: none;">
+                    <div class="form-group">
+                        <label>Image Source *</label>
+                        <div style="display: flex; gap: 10px; margin-bottom: 8px;">
+                            <label><input type="radio" name="imageSource" value="existing" checked onchange="toggleImageInput()"> Existing file</label>
+                            <label><input type="radio" name="imageSource" value="upload" onchange="toggleImageInput()"> Upload new</label>
+                        </div>
+                    </div>
+                    <div id="existingImageInput" class="form-group">
+                        <label for="imagePath">Image Path</label>
+                        <select id="imagePath">
+                            <option value="">-- Loading files... --</option>
+                        </select>
+                    </div>
+                    <div id="uploadImageInput" class="form-group" style="display: none;">
+                        <label for="imageUpload">Select Image</label>
+                        <input type="file" id="imageUpload" accept=".jpg,.jpeg,.png,.tif,.tiff,.gif,.bmp">
+                        <small>Supported: JPG, PNG, TIFF, GIF, BMP</small>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="sourceYear">Year</label>
+                    <input type="number" id="sourceYear" min="1700" max="2100">
+                </div>
+
+                <div class="form-group">
+                    <label for="sourceCategory">Category *</label>
+                    <select id="sourceCategory" required>
+                        <option value="">-- Select category --</option>
+                        <option value="basemap">Basemap</option>
+                        <option value="historical">Historical Map</option>
+                        <option value="aerial">Aerial Photo</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="sourceAttribution">Attribution</label>
+                    <input type="text" id="sourceAttribution">
+                    <small>Example: Kartverket</small>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary" onclick="hideAddSourceModal()">Cancel</button>
+                    <button type="submit" class="btn-primary">Add Source</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const BASE_PATH = 'data/georeference/';
+        // All API calls go through Docker nginx proxy
+        const API_BASE = '';
+
+        let sources = [];
+        let currentSource = null;
+        let historicalImage = null;
+        let gcps = [];
+        let selectedGcpIndex = null;
+        let gcpCounter = 0;
+        let waitingForModernClick = false;
+
+        // Canvas state
+        let canvas, ctx;
+        let zoom = 1, panX = 0, panY = 0;
+        let isDragging = false;
+        let dragStart = { x: 0, y: 0 };
+        let lastPan = { x: 0, y: 0 };
+
+        // GCP dragging state
+        let draggingGcpIndex = null;
+        let dragSource = null;
+
+        // Overlay state
+        let overlayState = {
+            enabled: false,
+            opacity: 0.5,
+            imageOverlay: null
+        };
+
+        // Leaflet
+        let modernMap;
+        let modernMarkers = {};
+
+        // Transform state
+        let currentTransform = null;
+
+        // =====================================================
+        // TRANSFORM ENGINE - Least Squares Affine Transform
+        // =====================================================
+
+        function calculateAffineTransform(gcpList) {
+            const complete = gcpList.filter(g =>
+                g.pixelX != null && g.pixelY != null &&
+                g.geoX != null && g.geoY != null
+            );
+
+            if (complete.length < 3) {
+                return null;
+            }
+
+            const n = complete.length;
+            const A = complete.map(g => [g.pixelX, g.pixelY, 1]);
+            const bX = complete.map(g => g.geoX);
+            const bY = complete.map(g => g.geoY);
+
+            const At = transpose(A);
+            const AtA = matMul(At, A);
+            const AtbX = matVec(At, bX);
+            const AtbY = matVec(At, bY);
+
+            const coeffX = solve3x3(AtA, AtbX);
+            const coeffY = solve3x3(AtA, AtbY);
+
+            if (!coeffX || !coeffY) {
+                return null;
+            }
+
+            const [a, b, c] = coeffX;
+            const [d, e, f] = coeffY;
+            const matrix = { a, b, c, d, e, f };
+
+            const det = a * e - b * d;
+            if (Math.abs(det) < 1e-15) {
+                return null;
+            }
+
+            const inverse = {
+                a: e / det,
+                b: -b / det,
+                c: (b * f - c * e) / det,
+                d: -d / det,
+                e: a / det,
+                f: (c * d - a * f) / det
+            };
+
+            const residuals = complete.map(gcp => {
+                const predicted = applyTransform(gcp.pixelX, gcp.pixelY, matrix);
+                const errorMeters = geoDistanceMeters(
+                    predicted.x, predicted.y,
+                    gcp.geoX, gcp.geoY
+                );
+                return { id: gcp.id, error: errorMeters };
+            });
+
+            const rms = Math.sqrt(
+                residuals.reduce((sum, r) => sum + r.error * r.error, 0) / residuals.length
+            );
+
+            return { matrix, inverse, rms, residuals };
+        }
+
+        function applyTransform(px, py, matrix) {
+            return {
+                x: matrix.a * px + matrix.b * py + matrix.c,
+                y: matrix.d * px + matrix.e * py + matrix.f
+            };
+        }
+
+        function applyInverseTransform(geoX, geoY, inverse) {
+            return {
+                x: inverse.a * geoX + inverse.b * geoY + inverse.c,
+                y: inverse.d * geoX + inverse.e * geoY + inverse.f
+            };
+        }
+
+        function geoDistanceMeters(lon1, lat1, lon2, lat2) {
+            const latRad = (lat1 + lat2) / 2 * Math.PI / 180;
+            const dx = (lon2 - lon1) * 111320 * Math.cos(latRad);
+            const dy = (lat2 - lat1) * 110540;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        function recalculateTransform() {
+            currentTransform = calculateAffineTransform(gcps);
+            updateErrorDisplay();
+            updateOverlayControls();
+            updateOverlay();
+        }
+
+        function updateErrorDisplay() {
+            const rmsEl = document.getElementById('rmsDisplay');
+            if (rmsEl) {
+                if (currentTransform) {
+                    rmsEl.textContent = `RMS: ${currentTransform.rms.toFixed(1)}m`;
+                    rmsEl.style.color = currentTransform.rms < 10 ? '#4ecca3' :
+                                        currentTransform.rms < 25 ? '#f39c12' : '#e74c3c';
+                } else {
+                    rmsEl.textContent = '';
+                }
+            }
+        }
+
+        // Matrix utilities
+        function transpose(M) {
+            const rows = M.length;
+            const cols = M[0].length;
+            const T = [];
+            for (let j = 0; j < cols; j++) {
+                T[j] = [];
+                for (let i = 0; i < rows; i++) {
+                    T[j][i] = M[i][j];
+                }
+            }
+            return T;
+        }
+
+        function matMul(A, B) {
+            const m = A.length;
+            const n = A[0].length;
+            const p = B[0].length;
+            const C = [];
+            for (let i = 0; i < m; i++) {
+                C[i] = [];
+                for (let j = 0; j < p; j++) {
+                    let sum = 0;
+                    for (let k = 0; k < n; k++) {
+                        sum += A[i][k] * B[k][j];
+                    }
+                    C[i][j] = sum;
+                }
+            }
+            return C;
+        }
+
+        function matVec(A, v) {
+            const m = A.length;
+            const n = A[0].length;
+            const result = [];
+            for (let i = 0; i < m; i++) {
+                let sum = 0;
+                for (let j = 0; j < n; j++) {
+                    sum += A[i][j] * v[j];
+                }
+                result[i] = sum;
+            }
+            return result;
+        }
+
+        function solve3x3(A, b) {
+            const aug = [
+                [A[0][0], A[0][1], A[0][2], b[0]],
+                [A[1][0], A[1][1], A[1][2], b[1]],
+                [A[2][0], A[2][1], A[2][2], b[2]]
+            ];
+
+            for (let col = 0; col < 3; col++) {
+                let maxRow = col;
+                let maxVal = Math.abs(aug[col][col]);
+                for (let row = col + 1; row < 3; row++) {
+                    if (Math.abs(aug[row][col]) > maxVal) {
+                        maxVal = Math.abs(aug[row][col]);
+                        maxRow = row;
+                    }
+                }
+
+                if (maxVal < 1e-15) {
+                    return null;
+                }
+
+                if (maxRow !== col) {
+                    [aug[col], aug[maxRow]] = [aug[maxRow], aug[col]];
+                }
+
+                for (let row = col + 1; row < 3; row++) {
+                    const factor = aug[row][col] / aug[col][col];
+                    for (let j = col; j < 4; j++) {
+                        aug[row][j] -= factor * aug[col][j];
+                    }
+                }
+            }
+
+            const x = [0, 0, 0];
+            for (let i = 2; i >= 0; i--) {
+                let sum = aug[i][3];
+                for (let j = i + 1; j < 3; j++) {
+                    sum -= aug[i][j] * x[j];
+                }
+                x[i] = sum / aug[i][i];
+            }
+
+            return x;
+        }
+
+        // =====================================================
+        // OVERLAY PREVIEW
+        // =====================================================
+
+        function toggleOverlay() {
+            overlayState.enabled = document.getElementById('overlayToggle').checked;
+            updateOverlay();
+        }
+
+        function setOverlayOpacity(opacity) {
+            overlayState.opacity = opacity;
+            if (overlayState.imageOverlay) {
+                overlayState.imageOverlay.setOpacity(opacity);
+            }
+        }
+
+        function toggleLinkedView() {
+            linkedViewEnabled = document.getElementById('linkToggle').checked;
+            if (linkedViewEnabled && georefBounds) {
+                syncHistoricalToModern();
+            }
+        }
+
+        function updateOverlay() {
+            if (overlayState.imageOverlay) {
+                modernMap.removeLayer(overlayState.imageOverlay);
+                overlayState.imageOverlay = null;
+            }
+
+            if (!overlayState.enabled || !currentTransform || !historicalImage) {
+                return;
+            }
+
+            const t = currentTransform.matrix;
+
+            const corners = [
+                applyTransform(0, 0, t),
+                applyTransform(historicalImage.width, 0, t),
+                applyTransform(historicalImage.width, historicalImage.height, t),
+                applyTransform(0, historicalImage.height, t)
+            ];
+
+            const lats = corners.map(c => c.y);
+            const lngs = corners.map(c => c.x);
+            const bounds = [
+                [Math.min(...lats), Math.min(...lngs)],
+                [Math.max(...lats), Math.max(...lngs)]
+            ];
+
+            overlayState.imageOverlay = L.imageOverlay(
+                historicalImage.src,
+                bounds,
+                { opacity: overlayState.opacity }
+            ).addTo(modernMap);
+
+            Object.values(modernMarkers).forEach(m => m.bringToFront());
+        }
+
+        function updateGeorefOverlay(previewPath, bounds) {
+            // Remove existing overlay
+            if (overlayState.imageOverlay) {
+                modernMap.removeLayer(overlayState.imageOverlay);
+                overlayState.imageOverlay = null;
+            }
+
+            // bounds = [minLng, minLat, maxLng, maxLat]
+            const leafletBounds = [
+                [bounds[1], bounds[0]],  // SW: [lat, lng]
+                [bounds[3], bounds[2]]   // NE: [lat, lng]
+            ];
+
+            // Load the georeferenced preview
+            const previewUrl = previewPath + '?t=' + Date.now();  // Cache bust
+
+            overlayState.imageOverlay = L.imageOverlay(
+                previewUrl,
+                leafletBounds,
+                { opacity: overlayState.opacity }
+            ).addTo(modernMap);
+
+            // Enable overlay controls and toggle
+            document.getElementById('overlayControls').style.display = 'flex';
+            document.getElementById('overlayToggle').checked = true;
+            overlayState.enabled = true;
+
+            // Store bounds for linked view (user can enable with toggle)
+            georefBounds = bounds;
+
+            // Fit map to the georeferenced bounds
+            modernMap.fitBounds(leafletBounds);
+
+            Object.values(modernMarkers).forEach(m => m.bringToFront());
+            setStatus('Georeferenced! Enable "Link views" to sync pan/zoom');
+        }
+
+        function updateOverlayControls() {
+            const controls = document.getElementById('overlayControls');
+            const complete = gcps.filter(g => g.geoX !== null && g.geoY !== null).length;
+            if (complete >= 3 && historicalImage) {
+                controls.style.display = 'flex';
+            } else {
+                controls.style.display = 'none';
+                if (overlayState.imageOverlay) {
+                    modernMap.removeLayer(overlayState.imageOverlay);
+                    overlayState.imageOverlay = null;
+                }
+            }
+        }
+
+        // =====================================================
+        // SOURCE MANAGEMENT
+        // =====================================================
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            initCanvas();
+            initModernMap();
+            initKeyboard();
+            await loadSources();
+        });
+
+        async function loadSources() {
+            try {
+                const resp = await fetch(`${API_BASE}/api/sources`);
+                const data = await resp.json();
+                sources = data.sources || [];
+
+                renderSourceList();
+                setStatus(`Loaded ${sources.length} sources. Select one to begin.`);
+            } catch (err) {
+                setStatus('Error loading sources: ' + err.message);
+                console.error(err);
+            }
+        }
+
+        function renderSourceList() {
+            const dropdown = document.getElementById('sourceDropdown');
+            const currentId = currentSource ? currentSource.id : '';
+
+            dropdown.innerHTML = '<option value="">-- Select source --</option>' +
+                sources.map(source => {
+                    const status = source.georef_status || 'pending';
+                    const statusIcon = status === 'georeferenced' ? '✓' :
+                                      status === 'verified' ? '○' : '•';
+                    const selected = source.id === currentId ? 'selected' : '';
+                    return `<option value="${source.id}" ${selected}>${statusIcon} ${source.name} (${source.year || '?'})</option>`;
+                }).join('');
+        }
+
+        async function selectSource(sourceId) {
+            if (!sourceId) return;  // Handle empty dropdown selection
+            currentSource = sources.find(s => s.id === sourceId);
+            if (!currentSource) return;
+
+            // Disable linked view when switching sources
+            linkedViewEnabled = false;
+            georefBounds = null;
+
+            // Hide publish button
+            document.getElementById('publishBtn').style.display = 'none';
+
+            // Clear existing GCPs
+            clearAllGCPs(true);
+
+            // Show GCP UI sections
+            document.getElementById('gcpSection').style.display = 'block';
+            document.getElementById('gcpHeader').style.display = 'block';
+            document.getElementById('gcpList').style.display = 'block';
+
+            // Show verify button for WMS/vector sources
+            const verifyBtn = document.getElementById('verifyBtn');
+            if ((currentSource.type === 'wms' || currentSource.type === 'vector-style') &&
+                currentSource.georef_status !== 'verified') {
+                verifyBtn.style.display = 'block';
+            } else {
+                verifyBtn.style.display = 'none';
+            }
+
+            // Load image if type is 'image'
+            if (currentSource.type === 'image' && currentSource.path) {
+                document.getElementById('loadingHistorical').style.display = 'block';
+                document.getElementById('zoomControls').style.display = 'none';
+
+                const imgUrl = currentSource.path;
+
+                try {
+                    const img = new Image();
+                    img.onload = () => {
+                        historicalImage = img;
+                        document.getElementById('loadingHistorical').style.display = 'none';
+                        document.getElementById('zoomControls').style.display = 'flex';
+
+                        resizeCanvas();
+                        fitToView();
+
+                        // Center modern map
+                        if (currentSource.bounds) {
+                            const [minLng, minLat, maxLng, maxLat] = currentSource.bounds;
+                            modernMap.fitBounds([[minLat, minLng], [maxLat, maxLng]]);
+                        } else {
+                            modernMap.setView([63.43, 10.40], 14);
+                        }
+
+                        document.getElementById('sourceInfo').textContent =
+                            `${currentSource.year || ''} | ${img.width}×${img.height}px`;
+
+                        setStatus(`Loaded ${currentSource.name}`);
+
+                        // Try to load existing GCPs
+                        loadExistingGCPs(true);
+                    };
+                    img.onerror = () => {
+                        document.getElementById('loadingHistorical').style.display = 'none';
+                        setStatus('Error loading image: ' + imgUrl);
+                    };
+                    img.src = imgUrl;
+                } catch (err) {
+                    setStatus('Error: ' + err.message);
+                }
+            } else {
+                setStatus(`Selected ${currentSource.name} (${currentSource.type}). WMS/vector sources don't need georeferencing.`);
+                document.getElementById('sourceInfo').textContent = `${currentSource.type} - ${currentSource.year || 'N/A'}`;
+            }
+        }
+
+        function showAddSourceModal() {
+            document.getElementById('addSourceModal').classList.add('show');
+        }
+
+        function hideAddSourceModal() {
+            document.getElementById('addSourceModal').classList.remove('show');
+            document.getElementById('addSourceForm').reset();
+            updateSourceFormFields();
+        }
+
+        function updateSourceFormFields() {
+            const type = document.getElementById('sourceType').value;
+
+            document.getElementById('wmsFields').style.display = type === 'wms' ? 'block' : 'none';
+            document.getElementById('vectorFields').style.display = type === 'vector-style' ? 'block' : 'none';
+            document.getElementById('imageFields').style.display = type === 'image' ? 'block' : 'none';
+
+            // Load existing files when image type selected
+            if (type === 'image') {
+                loadInputFiles();
+            }
+        }
+
+        function toggleImageInput() {
+            const isUpload = document.querySelector('input[name="imageSource"]:checked').value === 'upload';
+            document.getElementById('existingImageInput').style.display = isUpload ? 'none' : 'block';
+            document.getElementById('uploadImageInput').style.display = isUpload ? 'block' : 'none';
+        }
+
+        async function loadInputFiles() {
+            try {
+                const resp = await fetch(`${API_BASE}/api/georef/images`);
+                const data = await resp.json();
+
+                const select = document.getElementById('imagePath');
+                select.innerHTML = '<option value="">-- Select file --</option>';
+
+                // Docker backend returns {images: [...]} instead of {success, files}
+                const files = data.images || data.files || [];
+                files.forEach(file => {
+                    const opt = document.createElement('option');
+                    opt.value = file.path;
+                    opt.textContent = `${file.filename} (${(file.size / 1024 / 1024).toFixed(1)} MB)`;
+                    select.appendChild(opt);
+                });
+            } catch (err) {
+                console.error('Failed to load input files:', err);
+            }
+        }
+
+        async function uploadImage(file) {
+            const formData = new FormData();
+            formData.append('file', file);  // Docker backend expects 'file' not 'image'
+
+            const resp = await fetch(`${API_BASE}/api/georef/upload`, {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await resp.json();
+            if (!resp.ok) {
+                throw new Error(result.detail || result.error || 'Upload failed');
+            }
+            return result.path;
+        }
+
+        async function submitAddSource(event) {
+            event.preventDefault();
+
+            const type = document.getElementById('sourceType').value;
+            const sourceData = {
+                name: document.getElementById('sourceName').value,
+                type: type,
+                category: document.getElementById('sourceCategory').value,
+                year: parseInt(document.getElementById('sourceYear').value) || null,
+                attribution: document.getElementById('sourceAttribution').value || null
+            };
+
+            // Type-specific fields
+            if (type === 'wms') {
+                sourceData.url = document.getElementById('wmsUrl').value;
+                sourceData.layer = document.getElementById('wmsLayer').value;
+            } else if (type === 'vector-style') {
+                sourceData.url = document.getElementById('vectorUrl').value;
+            } else if (type === 'image') {
+                const isUpload = document.querySelector('input[name="imageSource"]:checked').value === 'upload';
+                if (isUpload) {
+                    const fileInput = document.getElementById('imageUpload');
+                    if (!fileInput.files.length) {
+                        setStatus('Please select an image file to upload');
+                        return;
+                    }
+                    setStatus('Uploading image...');
+                    try {
+                        sourceData.path = await uploadImage(fileInput.files[0]);
+                        setStatus('Image uploaded successfully');
+                    } catch (err) {
+                        setStatus('Upload failed: ' + err.message);
+                        return;
+                    }
+                } else {
+                    sourceData.path = document.getElementById('imagePath').value;
+                    if (!sourceData.path) {
+                        setStatus('Please select an existing image file');
+                        return;
+                    }
+                }
+            }
+
+            try {
+                const resp = await fetch(`${API_BASE}/api/sources`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(sourceData)
+                });
+
+                const result = await resp.json();
+
+                if (resp.ok) {
+                    setStatus(`Created source: ${result.id}`);
+                    hideAddSourceModal();
+                    await loadSources();
+                } else {
+                    setStatus('Error creating source: ' + (result.detail || result.error));
+                }
+            } catch (err) {
+                setStatus('Error: ' + err.message);
+            }
+        }
+
+        async function markAsVerified() {
+            if (!currentSource) {
+                setStatus('No source selected');
+                return;
+            }
+
+            if (currentSource.type !== 'wms' && currentSource.type !== 'vector-style') {
+                setStatus('Only WMS and vector sources can be marked as verified');
+                return;
+            }
+
+            try {
+                const resp = await fetch(`${API_BASE}/api/sources/${currentSource.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        georef_status: 'verified'
+                    })
+                });
+
+                if (resp.ok) {
+                    setStatus('Marked as verified');
+                    currentSource.georef_status = 'verified';
+                    await loadSources();
+                    selectSource(currentSource.id);
+                } else {
+                    const result = await resp.json();
+                    setStatus('Error: ' + (result.detail || result.error));
+                }
+            } catch (err) {
+                setStatus('Error: ' + err.message);
+            }
+        }
+
+        // =====================================================
+        // GCP MANAGEMENT
+        // =====================================================
+
+        async function loadExistingGCPs(silent = false) {
+            if (!currentSource) {
+                if (!silent) setStatus('Select a source first');
+                return;
+            }
+
+            const gcpUrl = `${BASE_PATH}gcps/${currentSource.id}.gcp.json`;
+
+            try {
+                const resp = await fetch(gcpUrl);
+                if (!resp.ok) {
+                    if (!silent) setStatus('No existing GCPs found for this source');
+                    return;
+                }
+
+                const data = await resp.json();
+
+                Object.values(modernMarkers).forEach(m => modernMap.removeLayer(m));
+                modernMarkers = {};
+
+                gcps = (data.gcps || []).map(g => ({
+                    id: g.id,
+                    pixelX: g.pixel_x,
+                    pixelY: g.pixel_y,
+                    geoX: g.geo_x,
+                    geoY: g.geo_y,
+                    description: g.description || ''
+                }));
+
+                gcpCounter = gcps.length;
+
+                gcps.forEach(gcp => {
+                    if (gcp.geoX !== null && gcp.geoY !== null) {
+                        createModernMarker(gcp);
+                    }
+                });
+
+                if (Object.keys(modernMarkers).length > 0) {
+                    const bounds = L.latLngBounds(
+                        gcps.filter(g => g.geoX && g.geoY).map(g => [g.geoY, g.geoX])
+                    );
+                    modernMap.fitBounds(bounds, { padding: [50, 50] });
+                }
+
+                recalculateTransform();
+                updateGCPList();
+                render();
+
+                setStatus(`Loaded ${gcps.length} existing GCPs`);
+            } catch (err) {
+                if (!silent) setStatus('Error loading GCPs: ' + err.message);
+            }
+        }
+
+        function initCanvas() {
+            canvas = document.getElementById('historicalMap');
+            ctx = canvas.getContext('2d');
+
+            let dragMoved = false;
+            const DRAG_THRESHOLD = 5;
+
+            canvas.addEventListener('mousedown', e => {
+                if (e.button === 0) {
+                    const rect = canvas.getBoundingClientRect();
+                    const p = canvasToPixel(e.clientX - rect.left, e.clientY - rect.top);
+
+                    const hitIndex = findGcpAtPixel(p.x, p.y);
+
+                    if (hitIndex !== null) {
+                        draggingGcpIndex = hitIndex;
+                        dragSource = 'canvas';
+                        selectedGcpIndex = hitIndex;
+                        canvas.style.cursor = 'move';
+                        updateGCPList();
+                        render();
+                    } else {
+                        isDragging = true;
+                        dragMoved = false;
+                        dragStart = { x: e.clientX, y: e.clientY };
+                        lastPan = { x: panX, y: panY };
+                        canvas.style.cursor = 'grabbing';
+                    }
+                }
+            });
+
+            canvas.addEventListener('mousemove', e => {
+                const rect = canvas.getBoundingClientRect();
+                const p = canvasToPixel(e.clientX - rect.left, e.clientY - rect.top);
+
+                if (draggingGcpIndex !== null && dragSource === 'canvas') {
+                    const gcp = gcps[draggingGcpIndex];
+                    gcp.pixelX = Math.max(0, Math.min(historicalImage.width - 1, Math.round(p.x)));
+                    gcp.pixelY = Math.max(0, Math.min(historicalImage.height - 1, Math.round(p.y)));
+                    recalculateTransform();
+                    render();
+                }
+                else if (isDragging) {
+                    const dx = e.clientX - dragStart.x;
+                    const dy = e.clientY - dragStart.y;
+                    if (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD) {
+                        dragMoved = true;
+                    }
+                    panX = lastPan.x + dx;
+                    panY = lastPan.y + dy;
+                    render();
+                }
+                else if (historicalImage) {
+                    const hitIndex = findGcpAtPixel(p.x, p.y);
+                    canvas.style.cursor = hitIndex !== null ? 'move' : 'crosshair';
+                }
+
+                if (historicalImage && p.x >= 0 && p.x < historicalImage.width && p.y >= 0 && p.y < historicalImage.height) {
+                    document.getElementById('cursorCoords').textContent = `Pixel: (${Math.round(p.x)}, ${Math.round(p.y)})`;
+                }
+            });
+
+            canvas.addEventListener('mouseup', e => {
+                if (draggingGcpIndex !== null && dragSource === 'canvas') {
+                    updateGCPList();
+                    draggingGcpIndex = null;
+                    dragSource = null;
+                    canvas.style.cursor = 'crosshair';
+                    return;
+                }
+
+                const wasClick = isDragging && !dragMoved;
+                isDragging = false;
+                canvas.style.cursor = 'crosshair';
+                if (wasClick) {
+                    onCanvasClick(e);
+                }
+            });
+
+            canvas.addEventListener('mouseleave', () => {
+                if (draggingGcpIndex !== null && dragSource === 'canvas') {
+                    updateGCPList();
+                    draggingGcpIndex = null;
+                    dragSource = null;
+                }
+                isDragging = false;
+                canvas.style.cursor = 'crosshair';
+            });
+
+            canvas.addEventListener('wheel', e => {
+                e.preventDefault();
+                const rect = canvas.getBoundingClientRect();
+                const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+                const factor = e.deltaY > 0 ? 0.9 : 1.1;
+                const newZoom = zoom * factor;
+                panX = mx - (mx - panX) * (newZoom / zoom);
+                panY = my - (my - panY) * (newZoom / zoom);
+                zoom = newZoom;
+                render();
+            });
+
+            new ResizeObserver(() => {
+                if (historicalImage) { resizeCanvas(); render(); }
+            }).observe(canvas.parentElement);
+        }
+
+        function findGcpAtPixel(px, py) {
+            const threshold = 15 / zoom;
+            for (let i = gcps.length - 1; i >= 0; i--) {
+                const dx = gcps[i].pixelX - px;
+                const dy = gcps[i].pixelY - py;
+                if (Math.sqrt(dx * dx + dy * dy) < threshold) {
+                    return i;
+                }
+            }
+            return null;
+        }
+
+        // Linked view state
+        let linkedViewEnabled = false;
+        let georefBounds = null;  // [minLng, minLat, maxLng, maxLat]
+
+        function initModernMap() {
+            modernMap = L.map('modernMap').setView([63.43, 10.40], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap'
+            }).addTo(modernMap);
+            modernMap.on('click', onModernMapClick);
+
+            // Sync historical canvas when modern map moves (if linked)
+            modernMap.on('moveend', syncHistoricalToModern);
+            modernMap.on('zoomend', syncHistoricalToModern);
+        }
+
+        function syncHistoricalToModern() {
+            if (!linkedViewEnabled || !georefBounds || !historicalImage) return;
+
+            // georefBounds = [minLng, minLat, maxLng, maxLat]
+            const [imgMinLng, imgMinLat, imgMaxLng, imgMaxLat] = georefBounds;
+            const imgW = historicalImage.width;
+            const imgH = historicalImage.height;
+
+            // Pixels per degree for the image
+            const pxPerLng = imgW / (imgMaxLng - imgMinLng);
+            const pxPerLat = imgH / (imgMaxLat - imgMinLat);
+
+            // Get current map view
+            const mapCenter = modernMap.getCenter();
+            const mapBounds = modernMap.getBounds();
+            const mapWidth = mapBounds.getEast() - mapBounds.getWest();
+
+            // Convert map center to image pixel coordinates
+            // X: longitude increases left-to-right
+            // Y: latitude increases bottom-to-top, but image Y increases top-to-bottom
+            const imgCenterX = (mapCenter.lng - imgMinLng) * pxPerLng;
+            const imgCenterY = (imgMaxLat - mapCenter.lat) * pxPerLat;
+
+            // Calculate zoom: canvas pixels per geo degree vs image pixels per geo degree
+            const canvasPxPerLng = canvas.width / mapWidth;
+            const newZoom = canvasPxPerLng / pxPerLng;
+
+            // Pan so imgCenter is at canvas center
+            panX = canvas.width / 2 - imgCenterX * newZoom;
+            panY = canvas.height / 2 - imgCenterY * newZoom;
+            zoom = newZoom;
+
+            drawCanvas();
+        }
+
+        function initKeyboard() {
+            document.addEventListener('keydown', e => {
+                if (e.key === 'Delete' || e.key === 'Backspace') {
+                    if (selectedGcpIndex !== null && !e.target.matches('input, select')) {
+                        deleteGCP(selectedGcpIndex);
+                    }
+                }
+                if (e.key === 'Escape') {
+                    waitingForModernClick = false;
+                    updateSteps();
+                    setStatus('Cancelled');
+                }
+            });
+        }
+
+        function resizeCanvas() {
+            const container = canvas.parentElement;
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+        }
+
+        function fitToView() {
+            if (!historicalImage) return;
+            const scaleX = canvas.width / historicalImage.width;
+            const scaleY = canvas.height / historicalImage.height;
+            zoom = Math.min(scaleX, scaleY) * 0.95;
+            panX = (canvas.width - historicalImage.width * zoom) / 2;
+            panY = (canvas.height - historicalImage.height * zoom) / 2;
+            render();
+        }
+
+        function zoomIn() { zoom *= 1.25; render(); }
+        function zoomOut() { zoom *= 0.8; render(); }
+
+        function render() {
+            if (!ctx) return;
+            ctx.fillStyle = '#2c3e50';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            if (!historicalImage) return;
+
+            ctx.save();
+            ctx.translate(panX, panY);
+            ctx.scale(zoom, zoom);
+            ctx.drawImage(historicalImage, 0, 0);
+            ctx.restore();
+
+            gcps.forEach((gcp, i) => {
+                const x = gcp.pixelX * zoom + panX;
+                const y = gcp.pixelY * zoom + panY;
+                const selected = i === selectedGcpIndex;
+                const complete = gcp.geoX !== null && gcp.geoY !== null;
+
+                if (complete && currentTransform && currentTransform.residuals) {
+                    const residual = currentTransform.residuals.find(r => r.id === gcp.id);
+                    if (residual) {
+                        const err = residual.error;
+                        const ringRadius = Math.min(40, 15 + err / 2);
+                        ctx.beginPath();
+                        ctx.arc(x, y, ringRadius, 0, Math.PI * 2);
+                        ctx.strokeStyle = err < 10 ? '#27ae60' : err < 25 ? '#f39c12' : '#e74c3c';
+                        ctx.lineWidth = 2;
+                        ctx.setLineDash([4, 4]);
+                        ctx.stroke();
+                        ctx.setLineDash([]);
+                    }
+                }
+
+                ctx.beginPath();
+                ctx.arc(x, y, 10, 0, Math.PI * 2);
+                ctx.strokeStyle = selected ? '#f1c40f' : (complete ? '#4ecca3' : '#e74c3c');
+                ctx.fillStyle = selected ? 'rgba(241,196,15,0.3)' : (complete ? 'rgba(78,204,163,0.3)' : 'rgba(231,76,60,0.3)');
+                ctx.lineWidth = selected ? 3 : 2;
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(x - 15, y); ctx.lineTo(x + 15, y);
+                ctx.moveTo(x, y - 15); ctx.lineTo(x, y + 15);
+                ctx.stroke();
+
+                ctx.fillStyle = '#fff';
+                ctx.font = '11px sans-serif';
+                ctx.fillText(gcp.id, x + 12, y - 5);
+            });
+        }
+
+        function canvasToPixel(cx, cy) {
+            return { x: (cx - panX) / zoom, y: (cy - panY) / zoom };
+        }
+
+        function onCanvasClick(e) {
+            if (!historicalImage || isDragging) return;
+            const rect = canvas.getBoundingClientRect();
+            const p = canvasToPixel(e.clientX - rect.left, e.clientY - rect.top);
+            if (p.x < 0 || p.x >= historicalImage.width || p.y < 0 || p.y >= historicalImage.height) return;
+
+            const threshold = 20 / zoom;
+            for (let i = gcps.length - 1; i >= 0; i--) {
+                if (Math.abs(gcps[i].pixelX - p.x) < threshold && Math.abs(gcps[i].pixelY - p.y) < threshold) {
+                    selectGCP(i);
+                    return;
+                }
+            }
+
+            gcpCounter++;
+            gcps.push({
+                id: `GCP${gcpCounter}`,
+                pixelX: Math.round(p.x),
+                pixelY: Math.round(p.y),
+                geoX: null,
+                geoY: null,
+                description: ''
+            });
+            selectedGcpIndex = gcps.length - 1;
+            waitingForModernClick = true;
+            updateGCPList();
+            updateSteps();
+            render();
+            setStatus(`Added GCP${gcpCounter} - now click on modern map`);
+        }
+
+        function onModernMapClick(e) {
+            if (!waitingForModernClick || selectedGcpIndex === null) {
+                setStatus('First click on historical map');
+                return;
+            }
+
+            const gcp = gcps[selectedGcpIndex];
+            gcp.geoX = e.latlng.lng;
+            gcp.geoY = e.latlng.lat;
+
+            if (modernMarkers[gcp.id]) {
+                modernMarkers[gcp.id].setLatLng(e.latlng);
+            } else {
+                createModernMarker(gcp);
+            }
+
+            waitingForModernClick = false;
+            recalculateTransform();
+            updateGCPList();
+            updateSteps();
+            render();
+
+            const complete = gcps.filter(g => g.geoX !== null).length;
+            setStatus(`${gcp.id} complete! (${complete}/${gcps.length})`);
+        }
+
+        function createModernMarker(gcp) {
+            const gcpIndex = gcps.findIndex(g => g.id === gcp.id);
+
+            const icon = L.divIcon({
+                className: 'gcp-marker-icon',
+                html: `<div class="gcp-marker-dot" data-id="${gcp.id}"></div>`,
+                iconSize: [20, 20],
+                iconAnchor: [10, 10]
+            });
+
+            const marker = L.marker([gcp.geoY, gcp.geoX], {
+                icon: icon,
+                draggable: true
+            }).addTo(modernMap);
+
+            marker.on('drag', (e) => {
+                const latlng = e.target.getLatLng();
+                gcp.geoX = latlng.lng;
+                gcp.geoY = latlng.lat;
+                recalculateTransform();
+                updateGCPList();
+            });
+
+            marker.on('dragend', () => {
+                recalculateTransform();
+                updateGCPList();
+                render();
+            });
+
+            marker.on('click', () => {
+                if (gcpIndex >= 0) {
+                    selectGCP(gcpIndex);
+                }
+            });
+
+            marker.bindTooltip(gcp.id, { permanent: true, direction: 'right', offset: [10, 0] });
+            modernMarkers[gcp.id] = marker;
+        }
+
+        function selectGCP(i) {
+            selectedGcpIndex = i;
+            waitingForModernClick = true;
+            updateGCPList();
+            updateSteps();
+            render();
+
+            const gcp = gcps[i];
+            if (gcp.geoX && gcp.geoY) {
+                modernMap.setView([gcp.geoY, gcp.geoX], 16);
+            }
+            setStatus(`Selected ${gcp.id}`);
+        }
+
+        function deleteGCP(i) {
+            const gcp = gcps[i];
+            if (modernMarkers[gcp.id]) {
+                modernMap.removeLayer(modernMarkers[gcp.id]);
+                delete modernMarkers[gcp.id];
+            }
+            gcps.splice(i, 1);
+            if (selectedGcpIndex === i) { selectedGcpIndex = null; waitingForModernClick = false; }
+            else if (selectedGcpIndex > i) { selectedGcpIndex--; }
+            recalculateTransform();
+            updateGCPList();
+            updateSteps();
+            render();
+            setStatus(`Deleted ${gcp.id}`);
+        }
+
+        function clearAllGCPs(silent = false) {
+            if (!silent && gcps.length > 0 && !confirm(`Delete all ${gcps.length} GCPs?`)) return;
+            Object.values(modernMarkers).forEach(m => modernMap.removeLayer(m));
+            modernMarkers = {};
+            gcps = [];
+            gcpCounter = 0;
+            selectedGcpIndex = null;
+            waitingForModernClick = false;
+            currentTransform = null;
+            recalculateTransform();
+            updateGCPList();
+            updateSteps();
+            render();
+            if (!silent) setStatus('Cleared all GCPs');
+        }
+
+        function updateGCPList() {
+            const list = document.getElementById('gcpList');
+            const complete = gcps.filter(g => g.geoX !== null).length;
+            document.getElementById('gcpCount').textContent = `${complete}/${gcps.length}`;
+
+            if (gcps.length === 0) {
+                list.innerHTML = '<div style="text-align:center;color:#666;padding:20px;">Click on historical map to add GCPs</div>';
+                return;
+            }
+
+            list.innerHTML = gcps.map((gcp, i) => {
+                const done = gcp.geoX !== null;
+                const sel = i === selectedGcpIndex;
+
+                let errorHtml = '';
+                if (done && currentTransform && currentTransform.residuals) {
+                    const residual = currentTransform.residuals.find(r => r.id === gcp.id);
+                    if (residual) {
+                        const err = residual.error;
+                        const cls = err < 10 ? 'error-good' : err < 25 ? 'error-warn' : 'error-bad';
+                        const icon = err < 10 ? '✓' : err < 25 ? '⚠' : '✗';
+                        errorHtml = `<span class="gcp-error ${cls}">${err.toFixed(1)}m ${icon}</span>`;
+                    }
+                }
+
+                return `
+                    <div class="gcp-item ${done ? 'complete' : 'incomplete'} ${sel ? 'selected' : ''}" onclick="selectGCP(${i})">
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <span class="gcp-id">${gcp.id}</span>
+                            ${errorHtml || `<span style="font-size:0.7rem;color:${done ? '#4ecca3' : '#e74c3c'}">${done ? '✓' : '⋯'}</span>`}
+                        </div>
+                        <div class="gcp-coords">
+                            px: (${gcp.pixelX}, ${gcp.pixelY})<br>
+                            ${done ? `geo: (${gcp.geoX.toFixed(5)}, ${gcp.geoY.toFixed(5)})` : 'geo: click modern map'}
+                        </div>
+                        <div class="gcp-actions">
+                            <button class="btn-danger" onclick="event.stopPropagation();deleteGCP(${i})">Delete</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateSteps() {
+            document.getElementById('step1').className = 'step' + (waitingForModernClick ? '' : ' active');
+            document.getElementById('step2').className = 'step' + (waitingForModernClick ? ' active' : '');
+        }
+
+        function setStatus(text) {
+            document.getElementById('statusText').textContent = text;
+        }
+
+        async function saveGCPs() {
+            if (!currentSource) { setStatus('Select a source first'); return false; }
+
+            const data = {
+                version: '1.0',
+                map_id: currentSource.id,
+                map_date: currentSource.year,
+                crs: 'EPSG:4326',
+                source_file: currentSource.path || currentSource.name,
+                created: new Date().toISOString(),
+                gcps: gcps.map(g => ({
+                    id: g.id,
+                    pixel_x: g.pixelX,
+                    pixel_y: g.pixelY,
+                    geo_x: g.geoX,
+                    geo_y: g.geoY,
+                    description: g.description || ''
+                }))
+            };
+
+            try {
+                const resp = await fetch(`${API_BASE}/api/georef/gcps/${currentSource.id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await resp.json();
+
+                if (resp.ok) {
+                    setStatus(`Saved ${gcps.length} GCPs`);
+                    return true;
+                } else {
+                    setStatus('Error saving: ' + (result.detail || result.error));
+                    return false;
+                }
+            } catch (err) {
+                setStatus('Server not running - downloading file instead');
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${currentSource.id}.gcp.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+                return false;
+            }
+        }
+
+        async function runGeoreference() {
+            if (!currentSource) { setStatus('Select a source first'); return; }
+            const complete = gcps.filter(g => g.geoX !== null).length;
+            if (complete < 4) {
+                setStatus(`Need at least 4 complete GCPs (have ${complete})`);
+                return;
+            }
+
+            setStatus('Saving GCPs...');
+            const saved = await saveGCPs();
+
+            if (!saved) {
+                setStatus('Save GCPs first, then run georeferencing');
+                return;
+            }
+
+            setStatus('Starting georeferencing job...');
+
+            try {
+                // Start the georeferencing job
+                const resp = await fetch(`${API_BASE}/api/georef/run`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        map_id: currentSource.id
+                    })
+                });
+
+                if (!resp.ok) {
+                    const err = await resp.json();
+                    setStatus('Georeferencing failed: ' + (err.detail || err.error));
+                    return;
+                }
+
+                const job = await resp.json();
+                setStatus(`Job started: ${job.job_id}`);
+
+                // Poll for completion
+                await pollJobCompletion(job.job_id);
+
+            } catch (err) {
+                setStatus('Server error: ' + err.message);
+                const cmd = `python scripts/georeference_map.py \\\n  --input ${currentSource.path} \\\n  --gcps data/georeference/gcps/${currentSource.id}.gcp.json \\\n  --output data/georeference/output/${currentSource.id}.tif`;
+                alert('Server not running. Run manually:\n\n' + cmd);
+            }
+        }
+
+        async function pollJobCompletion(jobId) {
+            const maxAttempts = 120;  // 2 minutes max
+            for (let i = 0; i < maxAttempts; i++) {
+                await new Promise(r => setTimeout(r, 1000));
+
+                try {
+                    const resp = await fetch(`${API_BASE}/api/jobs/${jobId}`);
+                    const job = await resp.json();
+
+                    if (job.status === 'completed') {
+                        // Get output info
+                        const outResp = await fetch(`${API_BASE}/api/georef/output/${currentSource.id}`);
+                        const output = await outResp.json();
+
+                        if (output.exists && output.bounds) {
+                            // Create preview overlay
+                            const previewPath = output.path.replace('.tif', '_preview.png');
+                            updateGeorefOverlay(previewPath, output.bounds);
+                        }
+
+                        setStatus(`Georeferenced! Output: ${output.path}`);
+                        document.getElementById('publishBtn').style.display = 'inline-block';
+                        return;
+                    } else if (job.status === 'failed') {
+                        setStatus('Georeferencing failed: ' + (job.error || 'Unknown error'));
+                        alert('Georeferencing failed. Check logs for details.');
+                        return;
+                    } else {
+                        setStatus(`Running... (${i + 1}s)`);
+                    }
+                } catch (err) {
+                    console.error('Poll error:', err);
+                }
+            }
+            setStatus('Timeout waiting for georeferencing to complete');
+        }
+
+        async function updateSourceStatus(status) {
+            try {
+                const resp = await fetch(`${API_BASE}/api/sources/${currentSource.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        georef_status: status,
+                        georeferenced: status === 'georeferenced'
+                    })
+                });
+
+                if (resp.ok) {
+                    setStatus(`Published! Status updated to: ${status}`);
+                    // Update local state without re-selecting (which clears GCPs)
+                    currentSource.georef_status = status;
+                    currentSource.georeferenced = (status === 'georeferenced');
+                    // Update the source in the sources array
+                    const idx = sources.findIndex(s => s.id === currentSource.id);
+                    if (idx !== -1) {
+                        sources[idx] = { ...sources[idx], georef_status: status, georeferenced: currentSource.georeferenced };
+                    }
+                    // Just re-render the list, don't re-select
+                    renderSourceList();
+                    // Hide publish button after successful publish
+                    document.getElementById('publishBtn').style.display = 'none';
+                } else {
+                    const result = await resp.json();
+                    setStatus('Error updating status: ' + (result.detail || result.error));
+                }
+            } catch (err) {
+                setStatus('Error updating status: ' + err.message);
+            }
+        }
+
+        async function publishSource() {
+            if (!currentSource) {
+                setStatus('No source selected');
+                return;
+            }
+            await updateSourceStatus('georeferenced');
+        }
+    </script>
+</body>
+</html>
