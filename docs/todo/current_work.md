@@ -16,8 +16,19 @@ Approved direction — set up GitHub Actions CI/deploy by reusing the
 
 - **Spec:** [`../spec/feat_cicd/SPEC.md`](../spec/feat_cicd/SPEC.md) (AC1–AC10)
 - **Plan:** [`../superpowers/plans/2026-06-20-cicd-vps-consolidation.md`](../superpowers/plans/2026-06-20-cicd-vps-consolidation.md)
-- **Next:** run `/implement` (start Phase 1 CI — needs no secrets). Phases 2–4 need
-  user-only steps: SSH access, GitHub secrets, DNS repoint.
+- **Runbook:** [`../tech/DEPLOYMENT.md`](../tech/DEPLOYMENT.md)
+- **Status:** ✅ **Harness implemented & committed** (`1051807`): CI (`test.yml`),
+  `deploy-prod`/`deploy-stage`/`provision-vps` workflows, `deploy_vps.sh`/
+  `setup_vps.sh`/`sync_data.sh`, prod+stage nginx vhosts, `rollback.sh`,
+  `/version` contract. All syntax-validated; version test green.
+- **Remaining (user-only, can't be automated from here):** add GitHub secrets
+  (`VPS_SSH_KEY`/`VPS_HOST`/`VPS_USER`/`GH_TOKEN`/`LETSENCRYPT_EMAIL`), create
+  `production`+`staging` Environments, point DNS at the VPS, run *Provision VPS*,
+  `sync_data.sh`, verify, then retire `77.42.33.192`. See DEPLOYMENT.md §First-time setup.
+- **Bug — 403 roads_temporal.geojson:** durable fix shipped (`sync_data.sh`
+  `--chmod`). Live hotfix needs SSH: `chmod 644` the file on the box (DEPLOYMENT.md §Hotfix).
+- **Bug — building-year save "Load failed":** the `:5001` manual-edit server was
+  not running; start it with `.venv/bin/python scripts/api/server.py`.
 
 ---
 
