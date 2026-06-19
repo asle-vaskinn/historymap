@@ -2,6 +2,14 @@
 
 Execute an approved proposal using parallel agents.
 
+**Skills to invoke before implementing** (use the `Skill` tool):
+- `superpowers:executing-plans` — orchestration strategy for the plan
+- `tdd-workflow` — when writing any Python logic (tests before code)
+- `fastapi-patterns` — when touching `backend/app.py`, routes, or Pydantic schemas
+- `python-patterns` — for all Python changes (scripts/, ml/, backend/)
+- `security-review` — before committing any auth/API endpoint changes
+- `verification-loop` — after all agents complete, run the verification checklist
+
 ## Prerequisites
 
 - A proposal must be approved (check `docs/todo/current_work.md`)

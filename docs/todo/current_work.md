@@ -1,307 +1,98 @@
-# Current Work: Data Prep Tool v2 + Georeferencing
+# Current Work
 
-## Status: IN PROGRESS
-## Date: 2026-01-01
-## Last Updated: 2026-01-01
+**Status:** Frontend tool consolidation (uncommitted) + picking the project back up
+**Last updated:** 2026-06-20
 
-## Summary
-
-Simplified Data Prep Tool with two-layer model (Focus + Reference) and integrated georeferencing. Enables georeferencing historical maps with overlay preview, GCP persistence, and automatic image resizing for large files.
+> Read this first on any new task. For the full codebase map see [`AGENTS.md`](../../AGENTS.md);
+> for known loose ends see [`../tech/IMPLEMENTATION_STATUS.md`](../tech/IMPLEMENTATION_STATUS.md).
 
 ---
 
-## Recent Work: Data Prep Tool v2 (2026-01-01)
+## ▶ Active proposal: CI/CD + VPS consolidation (2026-06-20)
 
-### Completed
+Approved direction — set up GitHub Actions CI/deploy by reusing the
+`subscribe`/`nextbrain` harness and move the live site onto the shared Hetzner VPS
+(`62.238.25.113`) as tenant #3, retiring the dedicated box `77.42.33.192`.
 
-- [x] Simplified two-layer UI: Focus layer (radio buttons) + Reference layer (dropdown)
-- [x] WMS integration with nginx proxy (Trondheim Kommune, Geonorge)
-- [x] Safari CORS fix using XYZ tile scheme with transformRequest
-- [x] Integrated georeferencing workflow:
-  - Draggable image overlay for rough positioning
-  - Click-click GCP placement (image → map)
-  - Affine transform calculation with RMS error
-  - Preview using MapLibre image source
-  - GDAL-based GeoTIFF generation
-- [x] GCP persistence to `data/georeference/gcps/{source_id}.gcp.json`
-- [x] Automatic image resizing for large files (>8000px dimension)
-- [x] Source catalog auto-update with georeferenced layers
-
-### In Progress
-
-- [ ] Display georeferenced GeoTIFF layers in map viewer
-- [ ] "Update GCPs" feature for editing existing georeferencing
-- [ ] Research additional historical map sources (finn.no, Norkart)
-
-### Files
-
-| File | Purpose |
-|------|---------|
-| `frontend/dataprep.html` | Simple two-layer map viewer |
-| `frontend/dataprep.js` | Layer switching + georeferencing |
-| `frontend/dataprep.css` | UI styling |
-| `backend/app.py` | `/api/georeference` endpoint |
-| `data/sources/map_sources.json` | Source catalog |
+- **Spec:** [`../spec/feat_cicd/SPEC.md`](../spec/feat_cicd/SPEC.md) (AC1–AC10)
+- **Plan:** [`../superpowers/plans/2026-06-20-cicd-vps-consolidation.md`](../superpowers/plans/2026-06-20-cicd-vps-consolidation.md)
+- **Next:** run `/implement` (start Phase 1 CI — needs no secrets). Phases 2–4 need
+  user-only steps: SSH access, GitHub secrets, DNS repoint.
 
 ---
 
-## Archived: Water Timeline Pipeline
+## Where things stand
 
-### Status: PAUSED (ML training low IoU)
+The most recent committed work (`68f36a0`) added the **source manager** with TPS
+georeferencing and GCP improvements. On top of that there is a batch of **uncommitted
+frontend reorganization** in the working tree — the in-flight task is consolidating the
+georeferencing / ML tooling and clearing out superseded editors.
 
-Build water feature timeline showing coastal changes 1700-2025, including land reclamation areas like Brattøra (1960-1980), Nedre Elvehavn (1970-1990), and Ilsvika (1950-1970). Integrate water pipeline into main pipeline, ML extraction first, then manual corrections.
+### Uncommitted changes (working tree)
 
----
+| Change | Meaning |
+|--------|---------|
+| `source_viewer.{html,js,css}` → `feature_extraction.{html,js,css}` | Renamed the ML / annotation tool to its current name |
+| `dataprep.{html,js,css}` → `frontend/legacy/` | Old data-prep tool retired to read-only legacy |
+| New `frontend/legacy/{gcp_editor,georef_editor,source_manager_old,water_editor}.html` | Superseded standalone editors archived |
+| `frontend/source_manager.html` modified | Current georeferencing tool (TPS + GCP work) |
+| `backend/app.py`, `nginx.conf`, `scripts/georef_server.py` modified | Backend/routing adjustments accompanying the above |
+| New `docs/tech/TILE_*.md`, `docs/tech/georef_transform_analysis.md`, `scripts/generate_raster_tiles.sh` | Raster tile generation docs + script |
 
-## Implementation Plan
+**Current frontend tools (the live set):**
+- `index.html` + `app.js` — the map viewer (year slider, layer toggles, inspect/edit modes)
+- `source_manager.html` — georeferencing UI (GCP placement, affine preview + TPS warp)
+- `feature_extraction.{html,js,css}` — ML pipeline control + annotation drawing
+- `frontend/legacy/` — **read-only**, do not edit
 
-### Phase 1: Pipeline Integration (COMPLETED)
+### Next steps to resume
 
-**Goal:** Integrate water features into main data pipeline.
-
-- [x] Create OSM water fetcher (`scripts/ingest/fetch_osm_water.py`)
-- [x] Create water editor tool (`scripts/water_editor.py` on port 5002)
-- [x] Create `scripts/merge/merge_water.py` - merge OSM + manual + ML water sources
-- [x] Create `scripts/export/export_water.py` - export to GeoJSON/PMTiles
-- [x] Update `scripts/pipeline.py` to support `--feature-type water`
-- [x] Add water layer to main map with temporal filtering
-- [x] Test end-to-end: OSM fetch → merge → export → display
-
-**Scripts:**
-- `PYTHONPATH=scripts python3 scripts/ingest/fetch_osm_water.py`
-- `python3 scripts/water_editor.py` (port 5002)
-- `PYTHONPATH=scripts python3 scripts/pipeline.py --stage all --feature-type water`
-
-### Phase 2: ML Water Extraction (IN PROGRESS)
-
-**Goal:** Automate water extraction from historical maps using ML.
-
-- [x] Create training data prep script (`scripts/ml/prepare_water_training.py`)
-- [x] Bootstrap training data from OSM (`scripts/ml/bootstrap_water_training.py`)
-  - Generated 100 tiles (50 for 1937, 50 for 1880)
-  - Combined into `data/training_water/combined/`
-- [ ] Train/fine-tune model with water class
-  - Config: `ml/config_water.yaml`
-  - Training in progress, early stopping may trigger
-  - Current: Low water IoU due to class imbalance
-- [x] Create ML water ingest script (`scripts/ingest/ingest_ml_water.py`)
-- [x] Create ML water normalize script (`scripts/normalize/normalize_ml_water.py`)
-- [ ] Run inference on historical maps
-- [ ] Vectorize and integrate into pipeline
-
-**Commands:**
-```bash
-# Bootstrap training data from OSM
-python scripts/ml/bootstrap_water_training.py --year 1937 --tiles 50
-python scripts/ml/bootstrap_water_training.py --year 1880 --tiles 50
-
-# Train water model
-.venv/bin/python ml/train.py --config ml/config_water.yaml
-
-# Predict water mask (after training)
-python ml/predict.py --checkpoint models/checkpoints/water_model.pth --input <map>.tif
-
-# Vectorize
-python ml/vectorize.py --input <mask>.png --output water.geojson --class-filter 3
-```
-
-### Phase 3: Manual Corrections (PLANNED)
-
-**Goal:** Use existing source_viewer water editor to fix ML errors.
-
-**Key Areas to Review/Correct:**
-
-| Area | Approx Fill Date | Priority | Notes |
-|------|------------------|----------|-------|
-| Brattøra | 1960-1980 | HIGH | Railway yard expansion |
-| Nedre Elvehavn | 1970-1990 | HIGH | Now Solsiden district |
-| Ilsvika | 1950-1970 | MEDIUM | Industrial area |
-| Ravnkloa south | 1920-1940 | MEDIUM | Fish market expansion |
-| Skansen area | 1900-1920 | LOW | Fortress area |
-
-**Workflow:**
-1. Add ML water layer to source_viewer
-2. Compare with historical WMS backdrop
-3. Delete false positives, draw missed features
-4. Adjust boundaries where ML was imprecise
-5. Save to `data/sources/manual/water.geojson`
-6. Re-run pipeline to merge and export
-
-**Data Schema:**
-- `wtype`: river, fjord, lake, canal, harbor
-- `sd`: start date (when water existed from)
-- `ed`: end date (when filled/removed)
-- `ev`: evidence (h=high, m=medium, l=low)
-- `name`: feature name if known
-- `src`: osm, man, ml
+1. Decide whether the uncommitted frontend reorg is finished; if so, commit it on a branch
+   (per `CLAUDE.md` git workflow — never commit straight to `main`).
+2. Verify the renamed `feature_extraction.*` tool still loads and its API calls work
+   (`node --check frontend/feature_extraction.js`, then exercise via docker).
+3. Confirm `nginx.conf` + `backend/app.py` changes are consistent with the rename.
+4. Reconcile any docs still referencing the old `source_viewer.*` / `dataprep.*` names
+   (e.g. `docs/spec/feat_source_viewer/`).
 
 ---
 
-## Archive: Pipeline Robustness (COMPLETED 2025-12-23)
+## Paused: Water Timeline Pipeline
 
-### Pain Points (From Debugging Sessions)
+**Status: PAUSED** — ML water extraction blocked on low IoU (class imbalance).
 
-### 1. Docker Volume Shadowing
-- `./data` mounted over `./frontend/data` in nginx container
-- PMTiles rebuilt to `frontend/data/` but Docker served old file from `data/`
-- **Fix:** Change mount strategy or always export to `data/export/`
+Goal: show coastal change 1700–2025, including land-reclamation areas (Brattøra ~1960–1980,
+Nedre Elvehavn ~1970–1990, Ilsvika ~1950–1970).
 
-### 2. Inconsistent Export Paths
-- Export scripts write to `data/export/buildings.geojson`
-- PMTiles generated to `frontend/data/buildings_temporal.pmtiles`
-- But Docker serves from `data/buildings_temporal.pmtiles`
-- **Fix:** Single canonical path for PMTiles in `data/export/`
+- **Done:** water integrated into the main pipeline (`--feature-type water`); OSM water
+  fetcher (`scripts/ingest/fetch_osm_water.py`); water editor (`scripts/water_editor.py`,
+  :5002); `merge_water.py` + `export_water.py`; water layer with temporal filtering on the map.
+- **Blocked / TODO:** train a usable water model (`ml/config_water.yaml` — IoU too low),
+  run inference on historical maps, vectorize, then manual correction of key reclamation areas.
 
-### 3. Source Code Mapping Confusion
-- `sd_src` values: full names (`sefrak`, `trondheim_kommune`) vs short codes (`sef`, `tk`)
-- Export script has `SOURCE_CODES` mapping but inconsistently applied
-- Debug legend checkboxes used wrong values (`sef` instead of `sefrak`)
-- **Fix:** Single `constants.py` with canonical mappings used everywhere
+Schema reminder — water features: `wtype` (river/fjord/lake/canal/harbor), `sd`, `ed`,
+`ev` (h/m/l), `nm`, `src` (osm/man/ml). Manual edits land in
+`data/sources/manual/water.geojson`; re-run the pipeline to merge + export.
 
-### 4. Stale Data in Pipeline
-- Merged data had old `sd_src: "sefrak"`
-- New TK data ingested but needed full re-merge and re-export
-- No clear "rebuild everything" command
-- **Fix:** New `rebuild.sh` script for full pipeline rebuild
-
-### 5. Missing Fields in Export
-- `sd_src` field not initially exported to frontend format
-- Had to manually add to `export_geojson.py`
-- **Fix:** Required fields manifest + validation script
-
-### 6. Browser/Tile Caching
-- Aggressive caching made debugging difficult
-- No cache-busting on PMTiles files
-- **Fix:** Content hash in filename or query string cache-buster
-
-### 7. Debug UI/Data Mismatch
-- Legend showed SEFRAK/Matrikkelen checkboxes but no data had those `sd_src` values
-- Checkbox `data-source` values didn't match actual data
-- **Fix:** Build-time validation or dynamic legend generation
+Background: [`../tech/water-pipeline.md`](../tech/water-pipeline.md),
+[`../handover/water_pipeline_handover.md`](../handover/water_pipeline_handover.md).
 
 ---
 
-## Implementation Plan
+## Recently completed (chronological)
 
-### Phase 1: Rebuild Command & Consistent Paths (Priority: HIGH)
+- **Source manager + TPS georeferencing** — dual-canvas GCP placement, affine preview +
+  TPS final warp, GCP persistence, large-image auto-resize, source-catalog CRUD.
+- **Georeferencing alignment to OSM** — IoU matching with TPS/TIN/affine, train/test
+  validation (`scripts/align_to_osm.py`), `/api/align` + `/api/alignment-report`.
+- **Water editor tooling** — OSM import via Overpass, MapboxDraw polygon editing,
+  `/api/water/{add,update,delete}`.
+- **Road temporal network** — LSS-Hausdorff road matching, building-based date inference,
+  multi-layer fallback (ML → building inference → year-2000 fallback).
+- **Building replacement detection** — centroid-containment matching, `repl_by`/`repl_of`,
+  `demolished` flag.
+- **PMTiles + cache busting** — full PMTiles serving with `manifest.json` hash versioning;
+  nginx range-request + immutable-cache config.
+- **Timeline UI** — year slider with ◀ ▶ step buttons.
 
-- [ ] Create `rebuild.sh` - single command for full pipeline rebuild
-- [ ] Create `scripts/constants.py` with canonical paths and source mappings
-- [ ] Update `docker-compose.yml` nginx to serve from `data/export/`
-- [ ] Update all export scripts to use `constants.py` paths
-- [ ] Add `--fail-fast` default to `pipeline.py` (stop on first error)
-
-### Phase 2: Source Code Consistency (Priority: HIGH)
-
-- [ ] Define `SOURCE_IDS` (full) and `SOURCE_SHORT_CODES` (compact) in `constants.py`
-- [ ] Update normalizers to use full IDs consistently
-- [ ] Update `export_geojson.py` to convert to short codes at export time
-- [ ] Update frontend legend to use short codes matching export
-
-### Phase 3: Validation & Safety (Priority: MEDIUM)
-
-- [ ] Create `scripts/validate_export.py` for build-time validation
-- [ ] Add `REQUIRED_EXPORT_FIELDS` manifest to `constants.py`
-- [ ] Validate legend sources match exported data
-- [ ] Add atomic writes (temp file + rename) to export scripts
-
-### Phase 4: Cache Busting (Priority: MEDIUM)
-
-- [ ] Add content hash to PMTiles filename or use manifest.json
-- [ ] Update frontend to load tiles via manifest or cache-busted URL
-- [ ] Add `?v=timestamp` fallback for development
-
-### Phase 5: Error Handling (Priority: LOW)
-
-- [ ] Replace bare `except:` blocks with specific exception handling
-- [ ] Add logging for all suppressed errors
-- [ ] Add `--continue-on-error` flag for batch processing
-
----
-
-## Files to Create/Modify
-
-| File | Action | Purpose |
-|------|--------|---------|
-| `rebuild.sh` | CREATE | Single rebuild command |
-| `scripts/constants.py` | CREATE | Canonical paths and mappings |
-| `scripts/validate_export.py` | CREATE | Build-time validation |
-| `docker-compose.yml` | MODIFY | Fix nginx volume mounts |
-| `scripts/pipeline.py` | MODIFY | Add `--fail-fast` default |
-| `scripts/export/export_geojson.py` | MODIFY | Use constants, add fields |
-| `scripts/export/export_pmtiles.py` | MODIFY | Use constants, add hash |
-| `frontend/app.js` | MODIFY | Load via manifest/cache-bust |
-
----
-
-## Success Criteria
-
-- [ ] `./rebuild.sh` runs full pipeline without manual intervention
-- [ ] All exports go to `data/export/` (single canonical location)
-- [ ] Source codes consistent: full IDs in pipeline, short codes in frontend
-- [ ] `validate_export.py` catches missing fields before deployment
-- [ ] PMTiles changes visible immediately after rebuild (no stale cache)
-- [ ] Legend checkboxes match actual `sd_src` values in data
-
-
-## Success Criteria
-
-- [ ] Water features integrated into `pipeline.py` (buildings, roads, water)
-- [ ] OSM current water baseline loaded and visible on map
-- [ ] Manual tracing workflow documented and tested
-- [ ] At least 2 key areas traced (Brattøra, Nedre Elvehavn)
-- [ ] Water layer shows temporal changes (appears/disappears by year)
-- [ ] ML extraction approach documented for future implementation
-
----
-
-## Archive
-
-### Data Prep Tool Modularization (2025-12-23) - IMPLEMENTED
-
-Refactored `source_viewer.*` into modular `data_prep/` structure:
-- `core.js` - Config, state, initialization
-- `layers.js` - Map layer management
-- `buildings.js` - Building annotation workflow
-- `water.js` - Water tracing workflow
-- `ml_pipeline.js` - ML training jobs
-
-Default source changed to OpenStreetMap (current state), chronological order.
-
-### Data Overlays & Alignment Tools (2025-12-23) - IMPLEMENTED
-
-- Data overlay toggles (Buildings, Roads, Water from merged database)
-- Georeferencing alignment UI with TPS/TIN/Affine method selection
-- Smoothing and min IoU parameters exposed in UI
-- Backend API: `/api/align`, `/api/alignment-report/{source}`
-- Real-time job logging via WebSocket
-
-### Water Editor Tooling (2025-12-23) - IMPLEMENTED
-
-- OSM water import via Overpass API
-- Water editor mode in Data Prep Tool
-- Polygon drawing with MapboxDraw
-- Property form (name, wtype, sd, ed)
-- Backend API: `/api/water/add`, `/api/water/update`, `/api/water/delete`
-- Main map integration with temporal filtering
-
-### Iterative Georeferencing Alignment (2025-12-23) - IMPLEMENTED
-
-OSM-based alignment using IoU matching, TPS/TIN transforms, train/test validation.
-Script: `scripts/align_to_osm.py`
-
-### Road Fallback Layer System (2025-12-22) - IMPLEMENTED
-
-Multi-layer road fallback: ML detection → building inference → year 2000 fallback.
-
-### Building Replacement Detection (2025-12-22) - IMPLEMENTED
-
-Centroid-containment matching, `repl_by`/`repl_of` tracking, `demolished` flag.
-
-### Road Temporal Network (2025-12-22) - IMPLEMENTED
-
-LSS-Hausdorff matching, building-based date inference.
-
-### Year Step Buttons (2025-12-22) - IMPLEMENTED
-
-Timeline navigation with ◀ ▶ buttons.
+Older per-phase reports are frozen in [`../archive/`](../archive/).
