@@ -17,10 +17,11 @@ COPY frontend/index.html /usr/share/nginx/html/
 COPY frontend/style.css /usr/share/nginx/html/
 COPY frontend/app.js /usr/share/nginx/html/
 
-# Copy data files (PMTiles, etc.)
-# Note: You should have generated these before building the image
-COPY data/*.pmtiles /usr/share/nginx/html/data/ 2>/dev/null || true
-COPY data/*.mbtiles /usr/share/nginx/html/data/ 2>/dev/null || true
+# Data files (PMTiles) are NOT baked into the image. The canonical deploy is the
+# native nginx tenant (scripts/setup_vps.sh + deploy_vps.sh); data is uploaded
+# separately by scripts/sync_data.sh. The previous `COPY ... 2>/dev/null || true`
+# lines here were invalid — Dockerfile COPY does not support shell redirection,
+# so they never worked. Mount/sync data into /usr/share/nginx/html/data instead.
 
 # Set proper permissions
 RUN chmod -R 755 /usr/share/nginx/html && \
