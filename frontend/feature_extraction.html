@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Data Source Viewer - Trondheim Historical Map</title>
+    <title>Feature Extraction - Trondheim Historical Map</title>
 
     <!-- MapLibre GL JS -->
     <script src="https://unpkg.com/maplibre-gl@4.0.0/dist/maplibre-gl.js"></script>
@@ -13,14 +13,15 @@
     <script src="https://unpkg.com/@mapbox/mapbox-gl-draw@1.4.3/dist/mapbox-gl-draw.js"></script>
     <link href="https://unpkg.com/@mapbox/mapbox-gl-draw@1.4.3/dist/mapbox-gl-draw.css" rel="stylesheet" />
 
-    <link rel="stylesheet" href="source_viewer.css">
+    <link rel="stylesheet" href="feature_extraction.css">
 </head>
 <body>
     <!-- Header Bar -->
     <div class="header">
         <div class="header-left">
-            <a href="index.html" class="back-link">&larr; Back to Map</a>
-            <h1>Data Source Viewer</h1>
+            <a href="index.html" class="back-link">&larr; Map</a>
+            <h1>Feature Extraction</h1>
+            <a href="source_manager.html" class="back-link" style="margin-left: 15px;">Source Manager →</a>
             <a href="#" id="viewOnMapLink" class="view-on-map-link" title="View this source on the main map">View on Map →</a>
         </div>
         <div class="header-right">
@@ -352,6 +353,6 @@
         </div>
     </div>
 
-    <script src="source_viewer.js"></script>
+    <script src="feature_extraction.js"></script>
 </body>
 </html>

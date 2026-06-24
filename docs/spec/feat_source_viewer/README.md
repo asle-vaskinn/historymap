@@ -1,4 +1,14 @@
-# Feature: Data Source Viewer
+# Feature: Feature Extraction Tool
+
+## Overview
+
+Originally designed as a debug page for inspecting data sources, this tool evolved into a comprehensive **Feature Extraction Tool** for data quality inspection, water/building annotation, and ML training preparation.
+
+> **Note**: Two main tools exist:
+> - `frontend/feature_extraction.*` - Multi-purpose data prep with editing capabilities
+> - `frontend/source_manager.html` - Georeferencing workflow (see `feat_georeferencing`)
+>
+> Legacy tools moved to `frontend/legacy/`: dataprep, gcp_editor, georef_editor
 
 ## Problem
 
@@ -7,84 +17,83 @@ When debugging data quality issues, it's difficult to:
 - Understand what normalization did to the data
 - Verify that features are correctly georeferenced
 - Isolate issues to a specific source
+- Manually correct ML detection errors
 
 ## Solution
 
-A standalone debug page for inspecting individual data sources with three views:
+A standalone page for inspecting and editing data sources with multiple capabilities:
 
-| View | Purpose |
-|------|---------|
-| **Raw** | See original source data (raster map for ML sources) |
-| **Normalized** | See ML output overlaid on source, colored by confidence |
-| **Rendered** | See final styled output on base map to verify placement |
+| Capability | Description |
+|------------|-------------|
+| **Source Inspection** | View raw, normalized, and rendered data |
+| **Water Editor** | Draw/edit water polygons with temporal attributes |
+| **Building Annotation** | Mark building corrections for ML training |
+| **Data Overlays** | Toggle buildings, roads, water from merged database |
+| **WMS Integration** | View historical WMS layers for comparison |
 
-## Scope (Phase 1)
-
-Single source: **Kartverket 1880 (kv1880)**
-
-Future phases can add: kv1904, air1947, sefrak, osm, manual
-
-## User Interface
-
-```
-┌─────────────────────────────────────────────────────┐
-│  Source: [kv1880 ▼]                    260 buildings │
-├─────────────────────────────────────────────────────┤
-│  [Raw] [Normalized] [Rendered]                      │
-├─────────────────────────────────────────────────────┤
-│                                                     │
-│                   Map View                          │
-│                                                     │
-└─────────────────────────────────────────────────────┘
-```
-
-## View Details
-
-### Raw View
-- Shows the original 1880 Kartverket map raster
-- No overlays
-- Allows inspection of source material quality
-
-### Normalized View
-- Raster background (same as Raw)
-- ML-detected building polygons overlaid
-- Polygons colored by confidence: red (low) → yellow (medium) → green (high)
-- Helps identify false positives and missed detections
-
-### Rendered View
-- Minimal base map (Carto Positron) for geographic context
-- Building polygons styled as they appear in production
-- Verifies correct georeferencing and placement
-
-## Technical Implementation
+## Current Implementation
 
 ### Files
-- `frontend/source_viewer.html` - standalone page
-- `frontend/source_viewer.js` - map logic and view switching
-- `frontend/source_viewer.css` - styling
+- `frontend/feature_extraction.html` - standalone page
+- `frontend/feature_extraction.js` - map logic, editing, layer management
+- `frontend/feature_extraction.css` - styling
 
-### Data Loading
-- Direct GeoJSON fetch (no PMTiles)
-- Raster tiles from source manifest
+### Capabilities Implemented
 
-### Dependencies
-- MapLibre GL JS (same version as main app)
-- Source manifest: `data/sources_manifest.json`
+**Data Inspection:**
+- [x] Multiple source selection (not just kv1880)
+- [x] WMS layer viewing (Trondheim Kommune, Geonorge historical)
+- [x] Data overlay toggles (buildings, roads, water)
+- [x] Feature inspection on click
 
-## Acceptance Criteria
+**Water Editor:**
+- [x] OSM water import via Overpass API
+- [x] Polygon drawing with MapboxDraw
+- [x] Property form (name, wtype, sd, ed)
+- [x] Backend persistence (`/api/water/*`)
 
-- [ ] Page loads at `frontend/source_viewer.html`
-- [ ] Dropdown shows kv1880 (single option for now)
-- [ ] Raw tab shows 1880 raster map
-- [ ] Normalized tab shows raster + confidence-colored polygons
-- [ ] Rendered tab shows base map + production-styled polygons
-- [ ] Stats bar shows building count
-- [ ] Map centers on Trondheim with appropriate zoom
+**Building Annotation:**
+- [x] Building correction workflow
+- [x] Backend API integration
 
-## Future Extensions
+### Backend APIs
 
-- Add source selector with all sources
-- Feature table with click-to-inspect
-- Diff view showing raw vs normalized properties
-- Processing log showing transformation steps
-- Side-by-side comparison of two sources
+| Endpoint | Purpose |
+|----------|---------|
+| `/api/water/add` | Add new water polygon |
+| `/api/water/update` | Update water properties |
+| `/api/water/delete` | Remove water polygon |
+| `/api/align` | Alignment tools (TPS/TIN/Affine) |
+
+## Original Scope (Phase 1) - COMPLETED
+
+Single source: **Kartverket 1880 (kv1880)** - Now supports multiple sources.
+
+## Dependencies
+
+- MapLibre GL JS
+- MapboxDraw (for polygon editing)
+- Backend API (`backend/app.py`)
+
+## Related Features
+
+- `feat_georeferencing` - Uses `frontend/source_manager.html` for GCP-based georeferencing
+- `feat_ml_extraction` - Consumes annotations from this tool
+
+## Changelog
+
+### 2026-01-03 (Consolidation)
+- Renamed: `source_viewer.*` → `feature_extraction.*`
+- Moved: Legacy tools (dataprep, gcp_editor, georef_editor) to `frontend/legacy/`
+- Updated: All file references in documentation
+
+### 2026-01-03
+- Updated: Documented evolved capabilities beyond original Phase 1 scope
+- Added: Water editor and building annotation documentation
+- Changed: Title to reflect dual-purpose nature
+
+### 2025-12-23 (Implementation)
+- Added: Water editor mode with OSM import
+- Added: Data overlay toggles
+- Added: Backend API integration
+- Expanded: Multi-source support

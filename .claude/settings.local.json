@@ -110,7 +110,14 @@
       "WebFetch(domain:www.tandfonline.com)",
       "WebFetch(domain:www.researchgate.net)",
       "Bash(pkill:*)",
-      "Bash(lsof:*)"
+      "Bash(lsof:*)",
+      "WebFetch(domain:mapanalyst.org)",
+      "WebFetch(domain:gdal.org)",
+      "WebFetch(domain:docs.protomaps.com)",
+      "WebFetch(domain:til.simonwillison.net)",
+      "WebFetch(domain:martin.maplibre.org)",
+      "WebFetch(domain:docs.maptiler.com)",
+      "Bash(rsync:*)"
     ]
   },
   "statusLine": {

@@ -65,8 +65,8 @@ results/
 data/cleanup.sh
 data/CLEANUP_RECOMMENDATIONS.md
 data/sources_manifest.json
-PMTILES_IMPLEMENTATION.md
-SOURCE_FILTER_FIX.md
+docs/archive/PMTILES_IMPLEMENTATION.md
+docs/archive/SOURCE_FILTER_FIX.md
 docs/matrikkelen_application.md
 
 # Editor files

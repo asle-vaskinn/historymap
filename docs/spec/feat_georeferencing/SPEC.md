@@ -8,7 +8,7 @@ Web-based solution for georeferencing historical maps with an **iterative refine
 
 1. **Iterative over perfect** - Start rough, refine as alignment becomes visible
 2. **Immediate feedback** - See alignment quality in real-time, not after export
-3. **Simple transforms** - Affine/polynomial only, no mesh warping (predictable behavior)
+3. **Two-stage transforms** - Fast affine preview in browser, TPS final warp on server
 4. **Standard projections** - Auto-detect Norwegian historical projections where possible
 
 ## Requirements
@@ -220,18 +220,46 @@ Maps from 1900-1960 often use Oslo meridian (10°43'22.5"E from Greenwich). The 
 
 ### Transform Types
 
-| Type | Min GCPs | Use Case |
-|------|----------|----------|
-| Affine (1st order) | 3 | Uniform scale/rotation, minimal distortion |
-| Polynomial 2nd | 6 | Moderate distortion (paper warping) |
-| Polynomial 3rd | 10 | Significant distortion (rarely needed) |
+The system uses a **two-stage approach**:
 
-**Default: Affine (1st order)** - Simple, predictable, handles most cases.
+1. **Browser Preview**: Affine transform (fast, client-side)
+2. **Final Warp**: TPS or polynomial via GDAL (accurate, server-side)
 
-Only use higher-order polynomials if:
-- Affine gives > 20m RMS error
-- Visible systematic distortion pattern
-- Sufficient well-distributed GCPs
+#### Available Methods
+
+| Type | Min GCPs | Use Case | Stage |
+|------|----------|----------|-------|
+| Affine (1st order) | 3 | Uniform scale/rotation, minimal distortion | Preview + Final |
+| Polynomial 2nd | 6 | Moderate distortion (paper warping) | Final only |
+| Polynomial 3rd | 10 | Significant distortion (rarely needed) | Final only |
+| **TPS (Thin Plate Spline)** | 10+ | **Local distortion, historical maps** | **Final (default)** |
+| TIN (Delaunay) | 6+ | Sharp boundaries, iterative alignment | Alignment only |
+
+#### Method Selection
+
+| Scenario | Recommended Method |
+|----------|-------------------|
+| Modern scan, minimal distortion | Affine |
+| Paper warping, systematic distortion | Polynomial 2nd |
+| Historical map with local distortion | **TPS** (current default) |
+| Building-based iterative alignment | TIN via `align_to_osm.py` |
+
+#### Why TPS for Historical Maps
+
+TPS (Thin Plate Spline) is ideal for Trondheim historical maps because:
+- **Zero error at GCPs** - landmarks match exactly
+- **Smooth interpolation** - gradual warping between control points
+- **Handles irregular distortion** - paper warping, projection inconsistencies
+- **No free parameters** - consistent, reproducible results
+
+The backend (`backend/app.py`) uses `gdalwarp -tps` for final georeferencing.
+
+#### Fallback Rules
+
+- **< 3 GCPs**: Cannot georeference
+- **3-5 GCPs**: Use affine (TPS underdetermined)
+- **6-9 GCPs**: Use polynomial-2 or TPS
+- **10+ GCPs**: Use TPS (recommended for historical maps)
 
 ## Technical Implementation
 
@@ -275,3 +303,36 @@ For live preview, transform historical image to overlay on Leaflet:
 
 // Recommended: Leaflet.imageOverlay with calculated bounds from affine transform
 ```
+
+## Implementation Status
+
+- [x] GCP editor with click-to-place (`frontend/source_manager.html`)
+- [x] Draggable image overlay for rough positioning
+- [x] Affine transform preview in browser
+- [x] Per-point RMS error display
+- [x] GCP persistence to JSON files
+- [x] Backend georeferencing with GDAL (`backend/app.py`)
+- [x] TPS final warp via `gdalwarp -tps`
+- [x] Automatic image resizing for large files
+- [x] Source catalog auto-update with georeferenced layers
+- [ ] Transform method selection UI (currently TPS hardcoded)
+- [ ] Polynomial preview in browser
+- [ ] Spatial error heatmap visualization
+
+## Implementation Files
+
+| File | Purpose |
+|------|---------|
+| `frontend/source_manager.html` | Georeferencing workflow UI |
+| `backend/app.py` | `/api/georeference` endpoint (TPS via GDAL) |
+| `scripts/georeference.py` | CLI georeferencing with polynomial support |
+| `scripts/georeference_map.py` | Rasterio-based affine georeferencing |
+| `scripts/align_to_osm.py` | Iterative TPS/TIN alignment using OSM buildings |
+
+## Changelog
+
+### 2026-01-03
+- Updated: Documented two-stage transform approach (affine preview + TPS final)
+- Added: TPS and TIN methods to transform types table
+- Changed: Design principle from "no mesh warping" to "two-stage transforms"
+- Added: Implementation status and file references

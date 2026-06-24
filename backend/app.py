@@ -266,6 +266,8 @@ class SourceUpdate(BaseModel):
     layer: Optional[str] = None
     bounds: Optional[List[float]] = None
     path: Optional[str] = None
+    georeferenced: Optional[bool] = None
+    georef_status: Optional[str] = None
 
 
 def load_sources_file() -> Dict[str, Any]:

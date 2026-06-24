@@ -252,7 +252,7 @@
     <header>
         <a href="index.html" style="color: #4ecca3; text-decoration: none; margin-right: 10px;">&larr; Map</a>
         <h1>Source Manager</h1>
-        <a href="source_viewer.html" style="color: #888; font-size: 0.8rem; margin-left: 10px;">Feature Editor →</a>
+        <a href="feature_extraction.html" style="color: #888; font-size: 0.8rem; margin-left: 10px;">Feature Extraction →</a>
         <select id="sourceDropdown" onchange="selectSource(this.value)" style="min-width: 280px; margin-left: 15px;">
             <option value="">-- Select source --</option>
         </select>
@@ -728,6 +728,11 @@
                 return;
             }
 
+            // Build TPS for overlay rendering (if not already built)
+            if (!tpsInverse) {
+                buildTPSTransforms();
+            }
+
             const t = currentTransform.matrix;
 
             // Calculate transformed corners (in geo coordinates)
@@ -780,13 +785,76 @@
                     const ctx = canvas.getContext('2d');
                     ctx.clearRect(0, 0, size.x, size.y);
 
-                    // Convert geo corners to screen points
-                    const screenCorners = corners.map(c =>
-                        map.latLngToContainerPoint([c.y, c.x])
-                    );
+                    // Use TPS if available for accurate warping
+                    if (tpsInverse) {
+                        this._drawWithTPS(ctx, map, size);
+                    } else {
+                        // Fallback to 4-corner affine
+                        const screenCorners = corners.map(c =>
+                            map.latLngToContainerPoint([c.y, c.x])
+                        );
+                        this._drawImageWithTransform(ctx, historicalImage, screenCorners);
+                    }
+                },
 
-                    // Draw image using perspective transform (4 corners)
-                    this._drawImageWithTransform(ctx, historicalImage, screenCorners);
+                _drawWithTPS: function(ctx, map, size) {
+                    const bounds = map.getBounds();
+                    const sw = bounds.getSouthWest();
+                    const ne = bounds.getNorthEast();
+
+                    // Grid resolution for TPS sampling
+                    const gridSize = 20;
+                    const tileWidth = size.x / gridSize;
+                    const tileHeight = size.y / gridSize;
+
+                    // Helper to convert screen coords to geo
+                    const screenToGeo = (sx, sy) => {
+                        const lng = sw.lng + (sx / size.x) * (ne.lng - sw.lng);
+                        const lat = ne.lat - (sy / size.y) * (ne.lat - sw.lat);
+                        return { lng, lat };
+                    };
+
+                    // For each grid cell
+                    for (let gy = 0; gy < gridSize; gy++) {
+                        for (let gx = 0; gx < gridSize; gx++) {
+                            const sx0 = gx * tileWidth;
+                            const sy0 = gy * tileHeight;
+                            const sx1 = (gx + 1) * tileWidth;
+                            const sy1 = (gy + 1) * tileHeight;
+
+                            // Convert screen corners to geo
+                            const geo00 = screenToGeo(sx0, sy0);
+                            const geo10 = screenToGeo(sx1, sy0);
+                            const geo11 = screenToGeo(sx1, sy1);
+                            const geo01 = screenToGeo(sx0, sy1);
+
+                            // Use TPS inverse to get image pixel coords
+                            const px00 = applyTPS(tpsInverse, geo00.lng, geo00.lat);
+                            const px10 = applyTPS(tpsInverse, geo10.lng, geo10.lat);
+                            const px11 = applyTPS(tpsInverse, geo11.lng, geo11.lat);
+                            const px01 = applyTPS(tpsInverse, geo01.lng, geo01.lat);
+
+                            // Check bounds
+                            const margin = 100;
+                            const inBounds = (p) =>
+                                p.x >= -margin && p.x < historicalImage.width + margin &&
+                                p.y >= -margin && p.y < historicalImage.height + margin;
+
+                            if (!inBounds(px00) && !inBounds(px10) && !inBounds(px11) && !inBounds(px01)) {
+                                continue;
+                            }
+
+                            // Draw two triangles
+                            this._drawTriangle(ctx, historicalImage,
+                                px00.x, px00.y, px10.x, px10.y, px01.x, px01.y,
+                                sx0, sy0, sx1, sy0, sx0, sy1
+                            );
+                            this._drawTriangle(ctx, historicalImage,
+                                px10.x, px10.y, px11.x, px11.y, px01.x, px01.y,
+                                sx1, sy0, sx1, sy1, sx0, sy1
+                            );
+                        }
+                    }
                 },
 
                 _drawImageWithTransform: function(ctx, img, corners) {
@@ -1711,8 +1779,9 @@
                 L[n + 2][i] = srcPoints[i].y;
             }
 
-            // Add regularization to K diagonal for numerical stability
-            const lambda = 1e-6;
+            // Add small regularization to K diagonal for numerical stability
+            // Note: This causes tiny interpolation error but prevents ill-conditioning
+            const lambda = 1e-10;  // Very small - should cause < 1mm error
             for (let i = 0; i < n; i++) {
                 L[i][i] += lambda;
             }
@@ -1754,10 +1823,13 @@
 
         // Build both forward (pixel->geo) and inverse (geo->pixel) TPS
         function buildTPSTransforms() {
+            console.log('buildTPSTransforms called');
             const completeGcps = gcps.filter(g => g.geoX !== null && g.geoY !== null);
+            console.log(`Complete GCPs: ${completeGcps.length}`);
             if (completeGcps.length < 3) {
                 tpsTransform = null;
                 tpsInverse = null;
+                console.log('Not enough GCPs for TPS (need 3+)');
                 return;
             }
 

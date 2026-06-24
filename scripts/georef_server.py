@@ -16,7 +16,8 @@ from pathlib import Path
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
 import os
-import cgi
+from email.parser import BytesParser
+from email.policy import HTTP
 
 # Configuration
 PORT = 8082
@@ -75,6 +76,8 @@ class GeorefHandler(SimpleHTTPRequestHandler):
             self.handle_georeference()
         elif parsed.path == "/api/upload-image":
             self.handle_upload_image()
+        elif parsed.path == "/api/generate-tiles":
+            self.handle_generate_tiles()
         else:
             self.send_error(404, "Not found")
 
@@ -158,17 +161,129 @@ class GeorefHandler(SimpleHTTPRequestHandler):
             )
 
             if result.returncode == 0:
-                self.send_json_response({
+                # Get bounds from GeoTIFF and create preview
+                preview_path = OUTPUT_DIR / f"{map_id}_preview.png"
+                bounds = None
+
+                try:
+                    import rasterio
+                    from PIL import Image
+
+                    with rasterio.open(output_path) as src:
+                        # Get bounds [minLng, minLat, maxLng, maxLat]
+                        b = src.bounds
+                        bounds = [b.left, b.bottom, b.right, b.top]
+
+                        # Create PNG preview (read and resize)
+                        # Read all bands
+                        data = src.read()
+                        # Transpose to HWC format for PIL
+                        if data.shape[0] >= 3:
+                            img_data = data[:3].transpose(1, 2, 0)
+                        else:
+                            img_data = data[0]
+
+                        img = Image.fromarray(img_data)
+                        # Resize to max 2048 width
+                        if img.width > 2048:
+                            ratio = 2048 / img.width
+                            new_size = (2048, int(img.height * ratio))
+                            img = img.resize(new_size, Image.Resampling.LANCZOS)
+                        img.save(preview_path)
+
+                except Exception as e:
+                    print(f"Preview creation failed: {e}")
+
+                response_data = {
                     "success": True,
                     "message": f"Georeferenced successfully!",
                     "output": str(output_path.relative_to(BASE_DIR)),
+                    "stdout": result.stdout,
+                    "stderr": result.stderr
+                }
+
+                if preview_path.exists():
+                    response_data["preview"] = str(preview_path.relative_to(BASE_DIR))
+                if bounds:
+                    response_data["bounds"] = bounds
+
+                self.send_json_response(response_data)
+            else:
+                self.send_json_response({
+                    "success": False,
+                    "error": "Georeferencing failed",
+                    "stdout": result.stdout,
+                    "stderr": result.stderr
+                }, status=500)
+
+        except Exception as e:
+            self.send_json_response({
+                "success": False,
+                "error": str(e)
+            }, status=500)
+
+    def handle_generate_tiles(self):
+        """Generate raster tiles from a georeferenced map."""
+        try:
+            content_length = int(self.headers['Content-Length'])
+            body = self.rfile.read(content_length)
+            data = json.loads(body.decode('utf-8'))
+
+            map_id = data.get('map_id')
+            if not map_id:
+                self.send_json_response({
+                    "success": False,
+                    "error": "Missing map_id"
+                }, status=400)
+                return
+
+            # Check if georeferenced file exists
+            input_path = OUTPUT_DIR / f"{map_id}.tif"
+            if not input_path.exists():
+                self.send_json_response({
+                    "success": False,
+                    "error": f"Georeferenced file not found: {input_path}. Run georeferencing first."
+                }, status=400)
+                return
+
+            # Run tile generation script
+            script_path = BASE_DIR / "scripts" / "generate_raster_tiles.sh"
+            if not script_path.exists():
+                self.send_json_response({
+                    "success": False,
+                    "error": "Tile generation script not found"
+                }, status=500)
+                return
+
+            cmd = [str(script_path), map_id]
+
+            print(f"Running tile generation: {' '.join(cmd)}")
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                cwd=str(BASE_DIR)
+            )
+
+            if result.returncode == 0:
+                # Check output directory
+                tiles_dir = BASE_DIR / "data" / "export" / "tiles" / map_id
+                tile_count = 0
+                if tiles_dir.exists():
+                    tile_count = sum(1 for _ in tiles_dir.rglob("*.png"))
+
+                self.send_json_response({
+                    "success": True,
+                    "message": f"Generated {tile_count} tiles for {map_id}",
+                    "tiles_dir": str(tiles_dir.relative_to(BASE_DIR)),
+                    "tile_count": tile_count,
                     "stdout": result.stdout,
                     "stderr": result.stderr
                 })
             else:
                 self.send_json_response({
                     "success": False,
-                    "error": "Georeferencing failed",
+                    "error": "Tile generation failed",
                     "stdout": result.stdout,
                     "stderr": result.stderr
                 }, status=500)
@@ -191,38 +306,69 @@ class GeorefHandler(SimpleHTTPRequestHandler):
                 }, status=400)
                 return
 
-            # Parse the form data
-            form = cgi.FieldStorage(
-                fp=self.rfile,
-                headers=self.headers,
-                environ={
-                    'REQUEST_METHOD': 'POST',
-                    'CONTENT_TYPE': content_type,
-                }
-            )
+            # Extract boundary from content-type
+            boundary = None
+            for part in content_type.split(';'):
+                part = part.strip()
+                if part.startswith('boundary='):
+                    boundary = part[9:].strip('"')
+                    break
 
-            # Get the uploaded file
-            if 'image' not in form:
+            if not boundary:
                 self.send_json_response({
                     "success": False,
-                    "error": "No 'image' field in form data"
+                    "error": "No boundary in multipart data"
                 }, status=400)
                 return
 
-            file_item = form['image']
-            if not file_item.file:
-                self.send_json_response({
-                    "success": False,
-                    "error": "No file uploaded"
-                }, status=400)
-                return
+            # Read content
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length)
 
-            # Get and sanitize filename
-            original_filename = file_item.filename
-            if not original_filename:
+            # Parse multipart data manually
+            boundary_bytes = ('--' + boundary).encode()
+            parts = body.split(boundary_bytes)
+
+            file_data = None
+            original_filename = None
+
+            for part in parts:
+                if b'Content-Disposition' not in part:
+                    continue
+
+                # Split headers from content
+                if b'\r\n\r\n' in part:
+                    header_section, content = part.split(b'\r\n\r\n', 1)
+                else:
+                    continue
+
+                header_text = header_section.decode('utf-8', errors='ignore')
+
+                # Check if this is the image field
+                if 'name="image"' in header_text:
+                    # Extract filename
+                    for line in header_text.split('\r\n'):
+                        if 'filename="' in line:
+                            start = line.index('filename="') + 10
+                            end = line.index('"', start)
+                            original_filename = line[start:end]
+                            break
+
+                    # Remove trailing boundary marker
+                    if content.endswith(b'\r\n'):
+                        content = content[:-2]
+                    if content.endswith(b'--'):
+                        content = content[:-2]
+                    if content.endswith(b'\r\n'):
+                        content = content[:-2]
+
+                    file_data = content
+                    break
+
+            if file_data is None or not original_filename:
                 self.send_json_response({
                     "success": False,
-                    "error": "No filename provided"
+                    "error": "No 'image' field or filename in form data"
                 }, status=400)
                 return
 
@@ -251,7 +397,7 @@ class GeorefHandler(SimpleHTTPRequestHandler):
 
             # Write file to disk
             with open(output_path, 'wb') as f:
-                f.write(file_item.file.read())
+                f.write(file_data)
 
             # Return success response
             self.send_json_response({

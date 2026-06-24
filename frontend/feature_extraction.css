@@ -102,7 +102,7 @@ body {
 
 /* Layer Panel (Left) */
 .layer-panel {
-    width: 260px;
+    width: 280px;
     background: #16213e;
     border-right: 1px solid #0f3460;
     display: flex;

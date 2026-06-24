@@ -2753,6 +2753,20 @@ function selectGcp(index) {
     // If GCP doesn't have geo coords, we're waiting for map click
     georefState.waitingForGeo = (gcp.geo_x === null || gcp.geo_y === null);
 
+    // Center image canvas on GCP pixel location
+    if (gcp.pixel_x !== null && gcp.pixel_y !== null && georefCanvas) {
+        canvasPan.x = georefCanvas.width / 2 - gcp.pixel_x * canvasZoom;
+        canvasPan.y = georefCanvas.height / 2 - gcp.pixel_y * canvasZoom;
+    }
+
+    // Center map on GCP geo location
+    if (gcp.geo_x !== null && gcp.geo_y !== null && map) {
+        map.easeTo({
+            center: [gcp.geo_x, gcp.geo_y],
+            duration: 300
+        });
+    }
+
     updateGcpList();
     renderCanvas();
 }
