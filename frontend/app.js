@@ -31,6 +31,54 @@ const CONFIG = {
     keyDates: [1700, 1800, 1850, 1900, 1950, 2000, 2025]
 };
 
+// =============================================================================
+// Cache Busting Support
+// =============================================================================
+
+// Data manifest for cache busting (loaded async)
+let dataManifest = null;
+
+/**
+ * Load the data manifest for cache busting.
+ * Call this before initializing the map for guaranteed fresh data.
+ */
+async function loadDataManifest() {
+    try {
+        const response = await fetch('data/manifest.json?' + Date.now());
+        if (response.ok) {
+            dataManifest = await response.json();
+            console.log(`Data manifest loaded: build ${dataManifest.build_version}`);
+        }
+    } catch (e) {
+        console.warn('Could not load data manifest (cache busting disabled):', e.message);
+    }
+}
+
+/**
+ * Get versioned URL for a data file.
+ * Appends ?v=<version> for cache busting if manifest is loaded.
+ *
+ * @param {string} path - Original path (e.g., 'data/buildings.geojson')
+ * @returns {string} Versioned path (e.g., 'data/buildings.geojson?v=1703001234')
+ */
+function getVersionedUrl(path) {
+    if (!dataManifest) return path;
+
+    // Extract filename from path
+    const filename = path.split('/').pop();
+    const fileInfo = dataManifest.files?.[filename];
+
+    if (fileInfo?.hash) {
+        return `${path}?v=${fileInfo.hash}`;
+    } else if (dataManifest.build_version) {
+        return `${path}?v=${dataManifest.build_version}`;
+    }
+
+    return path;
+}
+
+// =============================================================================
+
 // Global state
 let map = null;
 let currentYear = CONFIG.defaultYear;
@@ -41,6 +89,7 @@ let layerVisibility = {
     roads: false,           // OSM modern roads (hidden - use historical instead)
     roadsHistorical: true,  // Historical roads with timeline filtering
     water: true,
+    landuse: true,          // Parks, forests, etc.
     confidenceOverlay: false
 };
 
@@ -280,23 +329,28 @@ function createMapStyle(year) {
         sources: {
             trondheim: {
                 type: 'vector',
-                url: `pmtiles://${CONFIG.pmtilesPath}`,
+                url: `pmtiles://${getVersionedUrl(CONFIG.pmtilesPath)}`,
                 attribution: '&copy; OpenStreetMap contributors'
             },
             'buildings-dated': {
                 type: 'vector',
-                url: `pmtiles://${CONFIG.buildingsPath}`,
+                url: `pmtiles://${getVersionedUrl(CONFIG.buildingsPath)}`,
                 attribution: '&copy; OSM + SEFRAK + ML building dating'
             },
             'roads-temporal': {
                 type: 'geojson',
-                data: 'data/roads_temporal.geojson',
+                data: getVersionedUrl('data/roads_temporal.geojson'),
                 attribution: '&copy; ML-detected historical roads'
             },
             'finn-buildings': {
                 type: 'geojson',
                 data: 'data/sources/finn/normalized/buildings.geojson',
                 attribution: '&copy; Finn.no property listings'
+            },
+            'water-historical': {
+                type: 'geojson',
+                data: 'data/sources/osm/water.geojson',
+                attribution: '&copy; OSM water features'
             }
         },
         layers: [
@@ -340,6 +394,58 @@ function createMapStyle(year) {
                 }
             },
 
+            // Historical water (filled areas shown in contrasting color)
+            {
+                id: 'water-historical-fill',
+                type: 'fill',
+                source: 'water-historical',
+                filter: [
+                    'all',
+                    ['<=', 'sd', year],
+                    ['any',
+                        ['!has', 'ed'],
+                        ['>', 'ed', year]
+                    ]
+                ],
+                layout: {
+                    'visibility': layerVisibility.water ? 'visible' : 'none'
+                },
+                paint: {
+                    'fill-color': [
+                        'match',
+                        ['get', 'wtype'],
+                        'harbor', '#1e3a5f',
+                        'river', '#4a90e2',
+                        'fjord', '#2e5f8a',
+                        'lake', '#5fafd7',
+                        'canal', '#6b9bc3',
+                        '#4a90e2'
+                    ],
+                    'fill-opacity': 0.7
+                }
+            },
+            {
+                id: 'water-historical-outline',
+                type: 'line',
+                source: 'water-historical',
+                filter: [
+                    'all',
+                    ['<=', 'sd', year],
+                    ['any',
+                        ['!has', 'ed'],
+                        ['>', 'ed', year]
+                    ]
+                ],
+                layout: {
+                    'visibility': layerVisibility.water ? 'visible' : 'none'
+                },
+                paint: {
+                    'line-color': '#1e3a5f',
+                    'line-width': 1.5,
+                    'line-opacity': 0.8
+                }
+            },
+
             // Landuse (parks, forests, etc.)
             {
                 id: 'landuse',
@@ -347,6 +453,9 @@ function createMapStyle(year) {
                 source: 'trondheim',
                 'source-layer': 'landuse',
                 filter: createTemporalFilter(year),
+                layout: {
+                    'visibility': layerVisibility.landuse ? 'visible' : 'none'
+                },
                 paint: {
                     'fill-color': [
                         'match',
@@ -739,28 +848,36 @@ function createTemporalFilter(year) {
  * @returns {array} MapLibre filter expression for enabled sources
  */
 function createSourceFilter() {
-    const enabledSources = Object.entries(sourceFilter)
-        .filter(([_, enabled]) => enabled)
-        .map(([src, _]) => src);
+    // Read from debug legend checkboxes
+    const checkboxes = document.querySelectorAll('#debugLegend input[data-source]');
+    const enabledSources = [];
 
-    if (enabledSources.length === 0) {
-        // No sources enabled - show nothing
-        return ['==', ['get', 'src'], '__none__'];
-    }
+    checkboxes.forEach(cb => {
+        if (cb.checked) {
+            enabledSources.push(cb.dataset.source);
+        }
+    });
 
-    if (enabledSources.length === Object.keys(sourceFilter).length) {
-        // All sources enabled - no filter needed
+    console.log('createSourceFilter: checkboxes found:', checkboxes.length);
+    console.log('createSourceFilter: enabledSources:', enabledSources);
+
+    // If no checkboxes found, no filter needed
+    if (checkboxes.length === 0) {
+        console.log('createSourceFilter: no checkboxes, returning null');
         return null;
     }
 
-    // Filter to only enabled sources using 'match' for compatibility
-    // ['match', input, value1, true, value2, true, ..., false]
-    const matchArgs = ['match', ['get', 'src']];
-    enabledSources.forEach(src => {
-        matchArgs.push(src, true);
-    });
-    matchArgs.push(false);  // default
-    return matchArgs;
+    if (enabledSources.length === 0) {
+        // Nothing enabled - show nothing
+        console.log('createSourceFilter: no sources enabled, returning hide-all');
+        return ['==', 'sd_src', '__none__'];
+    }
+
+    // Build filter: show buildings where sd_src is in enabled list
+    // 'inh' (inherited) is just another source value like 'tk', 'fin', 'osm', etc.
+    const result = ['in', 'sd_src', ...enabledSources];
+    console.log('createSourceFilter: result:', JSON.stringify(result));
+    return result;
 }
 
 /**
@@ -851,43 +968,16 @@ function createBuildingFilter(year) {
         return temporalFilter;
     }
 
-    // === When filter is enabled, also apply source filtering ===
-    const conditions = [];
+    // === Debug mode: apply source filtering from checkboxes ===
+    const sourceFilter = createSourceFilter();
 
-    // Type A: Date Sources (timeline-aware)
-    const enabledDateSources = Object.entries(dateSourceFilter)
-        .filter(([_, enabled]) => enabled)
-        .map(([src, _]) => src);
-
-    if (enabledDateSources.length > 0) {
-        // Source filter using _src field
-        const dateSourceFilterExpr = ['in', '_src', ...enabledDateSources];
-        conditions.push(['all', dateSourceFilterExpr, temporalFilter]);
+    if (!sourceFilter) {
+        // No source filter (all enabled) - just apply temporal
+        return temporalFilter;
     }
 
-    // Type B: Snapshot Sources (static - ignores timeline)
-    const enabledSnapshots = Object.entries(snapshotFilter)
-        .filter(([_, enabled]) => enabled)
-        .map(([src, _]) => src);
-
-    if (enabledSnapshots.length > 0) {
-        // Snapshot buildings have _src='ml' and ml_src specifies which snapshot
-        const snapshotFilterExpr = [
-            'all',
-            ['==', '_src', 'ml'],
-            ['in', 'ml_src', ...enabledSnapshots]
-        ];
-        conditions.push(snapshotFilterExpr);
-    }
-
-    // Combine Type A and Type B with OR
-    if (conditions.length === 0) {
-        return ['==', '_src', '__none__']; // Always false
-    } else if (conditions.length === 1) {
-        return conditions[0];
-    } else {
-        return ['any', ...conditions];
-    }
+    // Combine temporal and source filters
+    return ['all', temporalFilter, sourceFilter];
 }
 
 /**
@@ -1270,19 +1360,21 @@ function initMap() {
 
             // Add click handler for buildings (edit mode)
             map.on('click', 'buildings', (e) => {
+                // Always log properties for debugging
+                if (e.features.length > 0) {
+                    console.log('Building properties:', JSON.stringify(e.features[0].properties));
+                }
                 handleBuildingClickForEdit(e);
             });
 
-            // Change cursor on hover for buildings (when in edit mode)
+            // Change cursor on hover for buildings (when in edit or debug mode)
             map.on('mouseenter', 'buildings', () => {
-                if (editMode) {
+                if (editMode || debugColorMode) {
                     map.getCanvas().style.cursor = 'pointer';
                 }
             });
             map.on('mouseleave', 'buildings', () => {
-                if (editMode) {
-                    map.getCanvas().style.cursor = 'pointer';
-                }
+                map.getCanvas().style.cursor = '';
             });
         });
 
@@ -1396,6 +1488,21 @@ function updateLayerFilters(year) {
             } else {
                 map.setFilter(layerId, roadFilter);
             }
+        }
+    });
+
+    // Update historical water filters
+    const waterFilter = [
+        'all',
+        ['<=', 'sd', year],
+        ['any',
+            ['!has', 'ed'],
+            ['>', 'ed', year]
+        ]
+    ];
+    ['water-historical-fill', 'water-historical-outline'].forEach(layerId => {
+        if (map.getLayer(layerId)) {
+            map.setFilter(layerId, waterFilter);
         }
     });
 
@@ -1526,12 +1633,12 @@ function createInspectionStyle(sourceId) {
         // Buildings with dates
         'buildings-dated': {
             type: 'vector',
-            url: `pmtiles://${CONFIG.buildingsPath}`
+            url: `pmtiles://${getVersionedUrl(CONFIG.buildingsPath)}`
         },
         // Roads with dates
         'roads-temporal': {
             type: 'geojson',
-            data: 'data/roads_temporal.geojson'
+            data: getVersionedUrl('data/roads_temporal.geojson')
         }
     };
 
@@ -2017,6 +2124,9 @@ function initLayerToggles() {
         backgroundBtn.addEventListener('click', () => {
             backgroundBtn.classList.toggle('active');
             const visible = backgroundBtn.classList.contains('active');
+            // Update global state to persist through style changes
+            layerVisibility.roadsHistorical = visible;
+            layerVisibility.landuse = visible;
             toggleBackgroundLayers(visible);
         });
     }
@@ -2027,20 +2137,34 @@ function initLayerToggles() {
     if (debugBtn) {
         debugBtn.addEventListener('click', () => {
             debugColorMode = !debugColorMode;
+            sourceFilterEnabled = debugColorMode;  // Enable source filtering in debug mode
             debugBtn.classList.toggle('active', debugColorMode);
             console.log('Debug color mode:', debugColorMode ? 'ON' : 'OFF');
+            console.log('Source filtering:', sourceFilterEnabled ? 'ON' : 'OFF');
 
             // Show/hide legend
             if (debugLegend) {
                 debugLegend.style.display = debugColorMode ? 'block' : 'none';
             }
 
-            // Update building paint
+            // Update building paint and filter
             if (map && map.loaded()) {
                 updateBuildingPaint();
+                updateLayerFilters(currentYear);
             }
         });
     }
+
+    // Debug source filter checkboxes
+    const filterCheckboxes = document.querySelectorAll('#debugLegend input[data-source]');
+    filterCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', () => {
+            console.log('Source filter changed:', checkbox.dataset.source, checkbox.checked);
+            if (map && map.loaded()) {
+                updateLayerFilters(currentYear);
+            }
+        });
+    });
 
     // Edit mode toggle
     const editBtn = document.getElementById('toggleEdit');
@@ -2069,27 +2193,199 @@ function toggleEditMode() {
     console.log('Edit mode:', editMode ? 'ON' : 'OFF');
 }
 
+// Track highlighted donor buildings
+let highlightedDonors = [];
+
 /**
- * Handle building click for edit mode
+ * Highlight donor buildings that contributed to an inherited date
+ */
+function highlightDonorBuildings(donorBids) {
+    // Clear previous highlights
+    clearDonorHighlights();
+
+    if (!donorBids || donorBids.length === 0) return;
+
+    console.log('Highlighting donors:', donorBids);
+
+    // Store for later clearing
+    highlightedDonors = donorBids;
+
+    // Create a filter to highlight donor buildings
+    if (!map.getLayer('donor-highlights')) {
+        map.addLayer({
+            id: 'donor-highlights',
+            type: 'line',
+            source: 'buildings',
+            'source-layer': 'buildings',
+            paint: {
+                'line-color': '#00ff00',
+                'line-width': 4,
+                'line-opacity': 1
+            },
+            filter: ['in', 'bid', ...donorBids]
+        }, 'buildings-outline');
+    } else {
+        map.setFilter('donor-highlights', ['in', 'bid', ...donorBids]);
+        map.setLayoutProperty('donor-highlights', 'visibility', 'visible');
+    }
+
+    // Also add fill highlight
+    if (!map.getLayer('donor-highlights-fill')) {
+        map.addLayer({
+            id: 'donor-highlights-fill',
+            type: 'fill',
+            source: 'buildings',
+            'source-layer': 'buildings',
+            paint: {
+                'fill-color': '#00ff00',
+                'fill-opacity': 0.4
+            },
+            filter: ['in', 'bid', ...donorBids]
+        }, 'buildings');
+    } else {
+        map.setFilter('donor-highlights-fill', ['in', 'bid', ...donorBids]);
+        map.setLayoutProperty('donor-highlights-fill', 'visibility', 'visible');
+    }
+}
+
+/**
+ * Clear donor building highlights
+ */
+function clearDonorHighlights() {
+    highlightedDonors = [];
+
+    if (map.getLayer('donor-highlights')) {
+        map.setLayoutProperty('donor-highlights', 'visibility', 'none');
+    }
+    if (map.getLayer('donor-highlights-fill')) {
+        map.setLayoutProperty('donor-highlights-fill', 'visibility', 'none');
+    }
+}
+
+/**
+ * Handle building click for edit mode or debug mode
  */
 function handleBuildingClickForEdit(e) {
-    if (!editMode) return;
+    // Allow clicks in edit mode OR debug mode
+    if (!editMode && !debugColorMode) return;
     if (e.features.length === 0) return;
 
     const feature = e.features[0];
     const props = feature.properties;
 
+    // Debug: log all properties
+    console.log('Building clicked - all properties:', props);
+
+    // Parse donors array (may be a JSON string in tiles)
+    let donors = props.donors;
+    if (typeof donors === 'string') {
+        try {
+            donors = JSON.parse(donors);
+        } catch (e) {
+            donors = [];
+        }
+    }
+
     // Extract building data
     const buildingData = {
+        bid: props.bid || '',
         sd: props.sd || '',
         ed: props.ed || null,
         ev: props.ev || '',
         sd_src: props.sd_src || '',
         sd_method: props.sd_method || '',
-        osm_id: props._src_id || props.osm_id || ''
+        osm_id: props._src_id || props.osm_id || '',
+        donors: donors || []
     };
 
+    // In debug mode, highlight donor buildings and show info popup
+    if (debugColorMode && !editMode) {
+        if (buildingData.donors.length > 0) {
+            highlightDonorBuildings(buildingData.donors);
+        }
+        showDebugPopup(buildingData, e.lngLat);
+        return;
+    }
+
+    // In edit mode, show the full edit popup
     showEditPopup(buildingData, e.lngLat, feature.geometry);
+}
+
+/**
+ * Show debug info popup (no edit form)
+ */
+function showDebugPopup(buildingData, coordinates) {
+    // Close existing popup if any
+    if (editPopup) {
+        editPopup.remove();
+    }
+
+    const { method, source } = getMethodAndSource(buildingData.sd_src);
+
+    // Build donor info string for inherited buildings
+    let donorInfo = '';
+    if (buildingData.sd_src === 'inh' && buildingData.donors && buildingData.donors.length > 0) {
+        donorInfo = `<div class="donor-info"><strong>Donors:</strong> ${buildingData.donors.length} buildings (green)</div>`;
+    }
+
+    const html = `
+        <div class="debug-popup">
+            <div class="debug-info">
+                <div><strong>ID:</strong> ${buildingData.bid}</div>
+                <div><strong>Built:</strong> ${buildingData.sd || 'N/A'}</div>
+                <div><strong>Method:</strong> ${method}</div>
+                <div><strong>Source:</strong> ${source}</div>
+                ${donorInfo}
+            </div>
+        </div>
+    `;
+
+    editPopup = new maplibregl.Popup({
+        closeButton: true,
+        closeOnClick: true,
+        maxWidth: '280px'
+    })
+        .setLngLat(coordinates)
+        .setHTML(html)
+        .on('close', () => {
+            clearDonorHighlights();
+        })
+        .addTo(map);
+}
+
+/**
+ * Get method and source display from sd_src
+ */
+function getMethodAndSource(sd_src) {
+    if (!sd_src) {
+        return { method: 'Unknown', source: 'N/A' };
+    }
+
+    // Inherited dates
+    if (sd_src === 'inh') {
+        return { method: 'Inherited', source: 'Median of neighbors' };
+    }
+
+    // ML-extracted dates
+    if (sd_src.startsWith('ml')) {
+        const mlSources = {
+            'ml_kv1880': 'Kartverket 1880',
+            'ml_kv1904': 'Kartverket 1904',
+            'ml_air1947': 'Aerial 1947',
+            'ml': 'ML detection'
+        };
+        return { method: 'ML', source: mlSources[sd_src] || sd_src };
+    }
+
+    // Direct sources
+    const directSources = {
+        'tk': 'Trondheim Kommune',
+        'sef': 'SEFRAK',
+        'fin': 'FINN.no',
+        'osm': 'OpenStreetMap',
+        'man': 'Manual'
+    };
+    return { method: 'Direct', source: directSources[sd_src] || sd_src };
 }
 
 /**
@@ -2101,6 +2397,14 @@ function showEditPopup(buildingData, coordinates, geometry) {
         editPopup.remove();
     }
 
+    const { method, source } = getMethodAndSource(buildingData.sd_src);
+
+    // Build donor info string for inherited buildings
+    let donorInfo = '';
+    if (buildingData.sd_src === 'inh' && buildingData.donors && buildingData.donors.length > 0) {
+        donorInfo = `<div><strong>Donors:</strong> ${buildingData.donors.length} buildings (highlighted in green)</div>`;
+    }
+
     const html = `
         <div class="edit-popup">
             <h3>Edit Building</h3>
@@ -2108,8 +2412,9 @@ function showEditPopup(buildingData, coordinates, geometry) {
                 <div><strong>Built:</strong> ${buildingData.sd || 'N/A'}</div>
                 <div><strong>Demolished:</strong> ${buildingData.ed || 'N/A'}</div>
                 <div><strong>Evidence:</strong> ${buildingData.ev || 'N/A'}</div>
-                <div><strong>Source:</strong> ${buildingData.sd_src || 'N/A'}</div>
-                <div><strong>Method:</strong> ${buildingData.sd_method || 'N/A'}</div>
+                <div><strong>Method:</strong> ${method}</div>
+                <div><strong>Source:</strong> ${source}</div>
+                ${donorInfo}
             </div>
             <div class="edit-form">
                 <label>
@@ -2154,6 +2459,7 @@ function showEditPopup(buildingData, coordinates, geometry) {
 
         if (cancelBtn) {
             cancelBtn.addEventListener('click', () => {
+                clearDonorHighlights();
                 if (editPopup) {
                     editPopup.remove();
                     editPopup = null;
@@ -2188,7 +2494,8 @@ async function saveManualEdit(osmId, geometry, newSd, newEd) {
         const result = await response.json();
         console.log('Manual edit saved:', result);
 
-        // Close popup
+        // Clear donor highlights and close popup
+        clearDonorHighlights();
         if (editPopup) {
             editPopup.remove();
             editPopup = null;
@@ -2211,37 +2518,31 @@ function updateBuildingPaint() {
     if (!map || !map.getLayer('buildings')) return;
 
     if (debugColorMode) {
-        // Debug colors by date source and inheritance method
+        // Debug colors by date source (sd_src field)
         // Colors:
-        //   Direct dates: finn=blue, sefrak=brown, manual=green, osm=gray
-        //   Inherited: median=yellow, nearest=orange, fallback=red
+        //   Direct: tk=purple, finn=blue, sef=brown, osm=teal, manual=green
+        //   Inherited: inh=orange (most buildings)
         map.setPaintProperty('buildings', 'fill-color', [
             'case',
-            // Fallback (red) - worst quality
-            ['==', ['get', 'sd_method'], 'fallback'],
-            '#e74c3c',
-            // Nearest neighbor inherited (orange)
-            ['==', ['get', 'sd_method'], 'nearest'],
-            '#e67e22',
-            // Median inherited (yellow)
-            ['==', ['get', 'sd_method'], 'median'],
-            '#f1c40f',
-            // Direct from manual (green)
-            ['==', ['get', 'sd_src'], 'manual'],
+            // Direct from manual (green) - highest trust
+            ['==', ['get', 'sd_src'], 'man'],
             '#2ecc71',
-            // Direct from FINN (blue)
-            ['==', ['get', 'sd_src'], 'finn'],
-            '#3498db',
-            // Direct from SEFRAK (brown)
-            ['==', ['get', 'sd_src'], 'sefrak'],
-            '#8b4513',
             // Direct from Trondheim Kommune (purple)
             ['==', ['get', 'sd_src'], 'tk'],
             '#9b59b6',
-            // Direct from Matrikkelen (teal)
-            ['==', ['get', 'sd_src'], 'mat'],
+            // Direct from FINN (blue)
+            ['==', ['get', 'sd_src'], 'fin'],
+            '#3498db',
+            // Direct from SEFRAK (brown)
+            ['==', ['get', 'sd_src'], 'sef'],
+            '#8b4513',
+            // Direct from OSM tag (teal)
+            ['==', ['get', 'sd_src'], 'osm'],
             '#1abc9c',
-            // OSM or unknown (gray)
+            // Inherited from neighbors (orange)
+            ['==', ['get', 'sd_src'], 'inh'],
+            '#e67e22',
+            // Unknown/missing (gray)
             '#95a5a6'
         ]);
 
@@ -2292,9 +2593,8 @@ function toggleBackgroundLayers(visible) {
     if (!map || !map.loaded()) return;
     const visibility = visible ? 'visible' : 'none';
 
-    // Hide/show roads
-    const roadLayers = ['roads', 'roads-background', 'roads-line', 'roads-outline',
-                        'roads-historical', 'roads-historical-background', 'roads-historical-removed'];
+    // Hide/show historical roads only (OSM roads always hidden)
+    const roadLayers = ['roads-historical', 'roads-historical-background', 'roads-historical-removed'];
     roadLayers.forEach(layerId => {
         if (map.getLayer(layerId)) {
             map.setLayoutProperty(layerId, 'visibility', visibility);
@@ -2925,11 +3225,14 @@ async function triggerRebuild() {
 /**
  * Initialize the application
  */
-function init() {
+async function init() {
     console.log('Initializing Trondheim Historical Map application...');
     console.log('Configuration:', CONFIG);
 
     try {
+        // Load data manifest for cache busting (before loading any data)
+        await loadDataManifest();
+
         // Initialize PMTiles protocol
         initPMTiles();
 

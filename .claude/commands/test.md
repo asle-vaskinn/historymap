@@ -2,6 +2,10 @@
 
 Run tests and fix any failures.
 
+**Skills to invoke** (use the `Skill` tool):
+- `python-testing` — before writing or running pytest suites
+- `verification-loop` — systematic end-to-end verification checklist after tests pass
+
 ## Instructions
 
 ### 1. Identify Required Tests

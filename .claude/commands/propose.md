@@ -2,6 +2,12 @@
 
 Analyze a change request and propose documentation updates before implementation.
 
+**Skills to invoke:** Use the `Skill` tool to load relevant skills before acting:
+- Always invoke `superpowers:writing-plans` before writing the final plan
+- For backend/API changes: invoke `fastapi-patterns` and `api-design`
+- For Python logic: invoke `python-patterns`
+- For any new feature: invoke `eval-harness` to define acceptance criteria
+
 ## Instructions
 
 When the user describes what they want to achieve, follow this process:
@@ -50,9 +56,11 @@ Continue refining until user says **"approve"** or **"go"**.
 
 When user approves:
 
-1. Write the detailed plan to `docs/todo/current_work.md`
-2. Update any doc sections that can be written now
-3. Tell user: "Plan saved. Run `/implement` to begin."
+1. **Invoke `superpowers:writing-plans`** via the Skill tool to structure the plan
+2. Write the detailed plan to `docs/todo/current_work.md` (follow the plan format from that skill)
+3. Write the feature spec to `docs/spec/feat_<name>/SPEC.md` with acceptance criteria
+4. Update any doc sections that can be written now
+5. Tell user: "Plan saved. Run `/implement` to begin."
 
 ## Output Format
 

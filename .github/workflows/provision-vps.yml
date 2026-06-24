@@ -1,0 +1,40 @@
+name: Provision VPS
+
+# One-time (idempotent) provisioning of the historymap tenant on the shared
+# Hetzner VPS. Run manually from the Actions tab after the secrets + DNS are set.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "provision" to confirm'
+        required: true
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm == 'provision'
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Copy scripts and run setup
+        run: |
+          echo "${{ secrets.VPS_SSH_KEY }}" > /tmp/deploy_key
+          chmod 600 /tmp/deploy_key
+
+          # setup_vps.sh clones the repo itself, but it needs the nginx confs
+          # present to install the vhost on the very first run before the clone
+          # exists — so ship scripts/ up front to /tmp.
+          scp -i /tmp/deploy_key -o StrictHostKeyChecking=no -r scripts \
+              ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/
+
+          ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no \
+              ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
+              bash <<'ENDSSH'
+          export GH_TOKEN="${{ secrets.GH_TOKEN }}"
+          export LETSENCRYPT_EMAIL="${{ secrets.LETSENCRYPT_EMAIL }}"
+          export HISTORYMAP_BRANCH="main"
+          bash /tmp/scripts/setup_vps.sh
+          ENDSSH
+          rm -f /tmp/deploy_key

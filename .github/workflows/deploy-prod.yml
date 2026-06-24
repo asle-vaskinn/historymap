@@ -1,0 +1,61 @@
+name: Deploy production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Only one production deploy at a time.
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Deploy to VPS
+        run: |
+          echo "${{ secrets.VPS_SSH_KEY }}" > /tmp/deploy_key
+          chmod 600 /tmp/deploy_key
+          set -o pipefail
+          # NB: ${{ }} is substituted by GitHub Actions before the shell runs,
+          # even inside this quoted heredoc — so the secret is injected as the
+          # remote LETSENCRYPT_EMAIL without leaking into the runner's shell.
+          ssh -i /tmp/deploy_key \
+              -o StrictHostKeyChecking=no \
+              ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
+              bash 2>&1 <<'ENDSSH' | tee deploy.log
+          set -e
+          echo "=== ssh session opened: $(date -Iseconds) ==="
+          export LETSENCRYPT_EMAIL="${{ secrets.LETSENCRYPT_EMAIL }}"
+          git config --global --replace-all safe.directory /opt/historymap || true
+          cd /opt/historymap
+          echo "=== refreshing /opt/historymap from origin/main ==="
+          git fetch origin main
+          git reset --hard origin/main
+          echo "now at: $(git rev-parse --short HEAD) $(git log -1 --format=%s)"
+          echo "=== running deploy_vps.sh main ==="
+          bash scripts/deploy_vps.sh main
+          echo "=== ssh session closed: $(date -Iseconds) ==="
+          ENDSSH
+          rc=${PIPESTATUS[0]}
+          rm -f /tmp/deploy_key
+          exit "$rc"
+
+      - name: Verify deployed SHA
+        run: |
+          EXPECTED="${GITHUB_SHA:0:7}"
+          url="https://historymap.vaskinn.eu/version"
+          for i in $(seq 1 12); do
+              actual=$(curl -fsS --max-time 10 "$url" 2>/dev/null | tr -d '[:space:]' || true)
+              if [ "$actual" = "$EXPECTED" ]; then
+                  echo "✓ $url -> $actual"
+                  exit 0
+              fi
+              echo "attempt $i: expected $EXPECTED, got '${actual:-unreachable}' — retry in 5s"
+              sleep 5
+          done
+          echo "✗ $url did not converge to $EXPECTED within 60s"
+          exit 1

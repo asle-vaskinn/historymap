@@ -14,21 +14,30 @@
       "evidence_strength": "high",
       "notes": "Manually researched buildings with full provenance. Highest priority - researcher verified data."
     },
-    "finn": {
+    "trondheim_kommune": {
       "enabled": true,
-      "path": "../sources/finn/normalized/buildings.geojson",
+      "path": "../sources/trondheim_kommune/normalized/buildings.geojson",
       "priority": 1,
       "date_priority": 1,
       "trust_dates": true,
+      "evidence_strength": "high",
+      "notes": "Byantikvaren heritage database with ~6000 buildings. Official city antiquarian with exact 'datering' (construction year), demolition years, and ABC heritage classification."
+    },
+    "finn": {
+      "enabled": true,
+      "path": "../sources/finn/normalized/buildings.geojson",
+      "priority": 2,
+      "date_priority": 2,
+      "trust_dates": true,
       "evidence_strength": "medium",
       "match_by": ["osm_ref", "spatial"],
-      "notes": "Finn.no property listings with construction years. Exact dates, higher priority than SEFRAK 10-year ranges."
+      "notes": "Finn.no property listings with construction years."
     },
     "sefrak": {
       "enabled": true,
       "path": "../sources/sefrak/normalized/buildings.geojson",
-      "priority": 2,
-      "date_priority": 2,
+      "priority": 3,
+      "date_priority": 3,
       "trust_dates": true,
       "evidence_strength": "high",
       "notes": "Official heritage registry, 10-year resolution dates (midpoint used)"
@@ -41,15 +50,6 @@
       "trust_dates": false,
       "evidence_strength": "high",
       "notes": "Kartverket official cadastral data. Requires Norge digitalt partnership for access. Enable when data is manually downloaded."
-    },
-    "trondheim_kommune": {
-      "enabled": false,
-      "path": "../sources/trondheim_kommune/normalized/buildings.geojson",
-      "priority": 4,
-      "date_priority": 3,
-      "trust_dates": true,
-      "evidence_strength": "high",
-      "notes": "Municipal building permits with dates"
     },
     "matrikkelen": {
       "enabled": false,
@@ -162,7 +162,7 @@
   "osm_centric": {
     "enabled": true,
     "base_source": "osm",
-    "date_sources": ["manual", "finn", "sefrak"],
+    "date_sources": ["manual", "trondheim_kommune", "finn", "sefrak"],
     "fallback_year": 1960,
     "manual_keeps_geometry": true,
     "notes": "OSM buildings are canonical geometry. Date sources attach to OSM. Buildings without dates shown only for years >= fallback_year."
@@ -171,7 +171,8 @@
   "date_inference": {
     "fallback_year": 1960,
     "median_radius_m": 2000,
-    "exclude_sources": ["sefrak"],
-    "min_evidence_for_donation": ["h", "m"]
+    "exclude_sources": ["sefrak", "tk", "osm"],
+    "min_evidence_for_donation": ["h", "m"],
+    "notes": "Exclude sefrak, tk, and osm from inheritance - OSM explicit dates are mostly heritage buildings (churches, museums), not representative of area construction dates. Only FINN (normal real estate) and manual sources are used as donors."
   }
 }

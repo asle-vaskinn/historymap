@@ -13,21 +13,47 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
-
-# Source code mappings for frontend
-SOURCE_CODES = {
-    'nvdb': 'nvdb',
-    'osm_roads': 'osm',
-    'kulturminner': 'kult',
-    'ml_detected': 'ml',
-}
+# Import canonical source mappings from constants
+try:
+    from constants import (
+        ROAD_SOURCE_SHORT_CODES,
+        ROADS_MERGED,
+        ROADS_EXPORT,
+        ROADS_PMTILES,
+        to_road_short_code,
+        is_valid_road_source,
+    )
+except ImportError:
+    # Fallback for running directly
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from constants import (
+        ROAD_SOURCE_SHORT_CODES,
+        ROADS_MERGED,
+        ROADS_EXPORT,
+        ROADS_PMTILES,
+        to_road_short_code,
+        is_valid_road_source,
+    )
 
 
 def get_source_code(source: str) -> str:
-    """Map internal source name to compact frontend code."""
-    for key, code in SOURCE_CODES.items():
+    """Map internal source name to compact frontend code.
+
+    Args:
+        source: Source ID (e.g., 'nvdb', 'osm_roads')
+
+    Returns:
+        Short code (e.g., 'nvdb', 'osm')
+    """
+    # Check canonical mapping first
+    if source in ROAD_SOURCE_SHORT_CODES:
+        return ROAD_SOURCE_SHORT_CODES[source]
+
+    # Fuzzy match for partial matches (e.g., '_nvdb' in source)
+    for key, code in ROAD_SOURCE_SHORT_CODES.items():
         if key in source.lower():
             return code
+
     return 'unk'
 
 
@@ -237,13 +263,13 @@ def main():
 
     parser = argparse.ArgumentParser(description='Export road data to frontend format')
     parser.add_argument('--input', '-i', type=Path,
-                        default=Path(__file__).parent.parent.parent / 'data' / 'merged' / 'roads_merged.geojson',
-                        help='Input merged roads GeoJSON')
+                        default=ROADS_MERGED,
+                        help=f'Input merged roads GeoJSON (default: {ROADS_MERGED})')
     parser.add_argument('--output', '-o', type=Path,
-                        default=Path(__file__).parent.parent.parent / 'frontend' / 'data' / 'roads_temporal.geojson',
-                        help='Output frontend GeoJSON')
+                        default=ROADS_EXPORT,
+                        help=f'Output frontend GeoJSON (default: {ROADS_EXPORT})')
     parser.add_argument('--pmtiles', '-p', type=Path, default=None,
-                        help='Output PMTiles path (optional)')
+                        help=f'Output PMTiles path (default: {ROADS_PMTILES})')
     parser.add_argument('--min-confidence', type=float, default=0.5,
                         help='Minimum ML confidence to include')
     parser.add_argument('--min-zoom', type=int, default=10,

@@ -1,0 +1,64 @@
+name: Deploy staging
+
+# Deploys the head branch of any PR carrying the `staging` label to
+# stage.historymap.vaskinn.eu (the historymap-stage tenant). Re-deploys on each
+# push while the label is present. Matches the subscribe staging convention.
+
+on:
+  pull_request:
+    types: [labeled, synchronize, reopened]
+
+concurrency:
+  group: deploy-stage
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    # Only run when the PR currently carries the `staging` label.
+    if: contains(github.event.pull_request.labels.*.name, 'staging')
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Deploy head branch to staging
+        run: |
+          echo "${{ secrets.VPS_SSH_KEY }}" > /tmp/deploy_key
+          chmod 600 /tmp/deploy_key
+          set -o pipefail
+          ssh -i /tmp/deploy_key \
+              -o StrictHostKeyChecking=no \
+              ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
+              bash 2>&1 <<'ENDSSH' | tee deploy.log
+          set -e
+          BRANCH="${{ github.head_ref }}"
+          APP_DIR="/opt/historymap-stage"
+          export LETSENCRYPT_EMAIL="${{ secrets.LETSENCRYPT_EMAIL }}"
+          echo "=== staging deploy of branch $BRANCH ($(date -Iseconds)) ==="
+          git config --global --replace-all safe.directory "$APP_DIR" || true
+          # Bootstrap the stage checkout on first run.
+          if [ ! -d "$APP_DIR/.git" ]; then
+            git clone "https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/asle-vaskinn/historymap.git" "$APP_DIR"
+          fi
+          cd "$APP_DIR"
+          git fetch origin "$BRANCH"
+          git reset --hard "origin/$BRANCH"
+          # Share prod's data dir to avoid a second multi-GB copy.
+          mkdir -p "$APP_DIR/data"
+          APP_DIR="$APP_DIR" APP_USER=historymap SITE=historymap-stage \
+            bash scripts/deploy_vps.sh "$BRANCH"
+          echo "=== staging deploy done ==="
+          ENDSSH
+          rc=${PIPESTATUS[0]}
+          rm -f /tmp/deploy_key
+          exit "$rc"
+
+      - name: Verify staging SHA
+        run: |
+          url="https://stage.historymap.vaskinn.eu/version"
+          for i in $(seq 1 12); do
+              actual=$(curl -fsS --max-time 10 "$url" 2>/dev/null | tr -d '[:space:]' || true)
+              if [ -n "$actual" ]; then echo "✓ staging serving version $actual"; exit 0; fi
+              echo "attempt $i: staging not reachable yet — retry in 5s"
+              sleep 5
+          done
+          echo "✗ staging did not come up within 60s"
+          exit 1

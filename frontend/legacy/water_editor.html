@@ -1,0 +1,1579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Water Feature Tracing Editor</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            background: #16213e;
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            border-bottom: 1px solid #0f3460;
+            flex-wrap: wrap;
+        }
+
+        header h1 {
+            font-size: 1.1rem;
+            color: #4ecca3;
+        }
+
+        .header-section {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 5px 10px;
+            background: #1a1a2e;
+            border-radius: 4px;
+        }
+
+        .header-section label {
+            font-size: 0.8rem;
+            color: #aaa;
+        }
+
+        select, input, textarea {
+            padding: 8px 12px;
+            border: 1px solid #0f3460;
+            border-radius: 4px;
+            background: #1a1a2e;
+            color: #eee;
+            font-size: 0.9rem;
+        }
+
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #4ecca3;
+            color: #1a1a2e;
+            font-weight: 600;
+        }
+
+        .btn-primary:hover {
+            background: #3db892;
+        }
+
+        .btn-secondary {
+            background: #0f3460;
+            color: #eee;
+        }
+
+        .btn-secondary:hover {
+            background: #1a4a7a;
+        }
+
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+
+        .btn-info {
+            background: #3498db;
+            color: white;
+        }
+
+        .btn-info:hover {
+            background: #2980b9;
+        }
+
+        .btn-warning {
+            background: #f39c12;
+            color: #1a1a2e;
+            font-weight: 600;
+        }
+
+        .btn-warning:hover {
+            background: #e67e22;
+        }
+
+        .btn-active {
+            background: #f1c40f;
+            color: #1a1a2e;
+            font-weight: 600;
+        }
+
+        .main-container {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        #map {
+            flex: 1;
+            position: relative;
+        }
+
+        .sidebar {
+            width: 320px;
+            background: #16213e;
+            display: flex;
+            flex-direction: column;
+            border-left: 1px solid #0f3460;
+            overflow-y: auto;
+        }
+
+        .sidebar-section {
+            padding: 15px;
+            border-bottom: 1px solid #0f3460;
+        }
+
+        .sidebar-section h3 {
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+            color: #4ecca3;
+        }
+
+        .form-group {
+            margin-bottom: 12px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.85rem;
+            color: #aaa;
+            margin-bottom: 4px;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 60px;
+        }
+
+        .form-group-inline {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .form-group-inline input[type="range"] {
+            flex: 1;
+        }
+
+        .form-group-inline output {
+            font-size: 0.85rem;
+            color: #4ecca3;
+            min-width: 40px;
+        }
+
+        .feature-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+            max-height: 300px;
+        }
+
+        .feature-item {
+            background: #1a1a2e;
+            border: 1px solid #0f3460;
+            border-left: 3px solid #3498db;
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .feature-item:hover {
+            border-color: #4ecca3;
+            border-left-color: #4ecca3;
+        }
+
+        .feature-item.selected {
+            border-color: #f1c40f;
+            background: #1f2f4a;
+            border-left-color: #f1c40f;
+        }
+
+        .feature-item.multi-selected {
+            border-color: #e67e22;
+            background: #2a1f1a;
+            border-left-color: #e67e22;
+        }
+
+        .feature-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+
+        .feature-item-name {
+            font-weight: 600;
+            color: #4ecca3;
+        }
+
+        .feature-item-type {
+            font-size: 0.75rem;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background: #0f3460;
+            color: #aaa;
+        }
+
+        .feature-item-dates {
+            font-size: 0.8rem;
+            color: #888;
+        }
+
+        .feature-item-checkbox {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 16px;
+            height: 16px;
+        }
+
+        .feature-item.has-checkbox .feature-item-header {
+            margin-left: 25px;
+        }
+
+        .feature-item.has-checkbox .feature-item-dates {
+            margin-left: 25px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+        }
+
+        .status-bar {
+            background: #0f3460;
+            padding: 8px 15px;
+            font-size: 0.8rem;
+            color: #aaa;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .spacer {
+            flex: 1;
+        }
+
+        .workflow-hint {
+            background: #1f3a5f;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-size: 0.85rem;
+            line-height: 1.4;
+        }
+
+        .workflow-hint strong {
+            color: #4ecca3;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            font-size: 0.8rem;
+        }
+
+        .stat-item {
+            background: #1a1a2e;
+            padding: 8px;
+            border-radius: 4px;
+            border-left: 3px solid #3498db;
+        }
+
+        .stat-label {
+            color: #888;
+            font-size: 0.75rem;
+        }
+
+        .stat-value {
+            color: #4ecca3;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        /* Custom Leaflet styles */
+        .leaflet-draw-toolbar a {
+            background-color: #16213e !important;
+        }
+
+        .leaflet-draw-actions a {
+            background-color: #16213e !important;
+            color: #eee !important;
+        }
+
+        .water-polygon {
+            fill: #3498db;
+            fill-opacity: 0.5;
+            stroke: #2980b9;
+            stroke-width: 2;
+        }
+
+        .water-polygon-selected {
+            fill: #f1c40f;
+            fill-opacity: 0.6;
+            stroke: #f39c12;
+            stroke-width: 3;
+        }
+
+        .water-polygon-multi-selected {
+            fill: #e67e22;
+            fill-opacity: 0.6;
+            stroke: #d35400;
+            stroke-width: 3;
+        }
+
+        .water-polygon-exists {
+            fill: #3498db;
+            fill-opacity: 0.5;
+        }
+
+        .water-polygon-demolished {
+            fill: #e74c3c;
+            fill-opacity: 0.5;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 10000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+
+        .modal-content {
+            background-color: #16213e;
+            margin: 10% auto;
+            padding: 20px;
+            border: 1px solid #0f3460;
+            border-radius: 8px;
+            width: 80%;
+            max-width: 500px;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .modal-header h2 {
+            color: #4ecca3;
+            font-size: 1.2rem;
+        }
+
+        .close {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            line-height: 1;
+        }
+
+        .close:hover {
+            color: #fff;
+        }
+
+        .modal-body {
+            margin-bottom: 15px;
+        }
+
+        .modal-footer {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Water Feature Tracing Editor</h1>
+
+        <!-- OSM Import Section -->
+        <div class="header-section">
+            <button class="btn-info" onclick="importOSMWater()">Import OSM Water</button>
+        </div>
+
+        <!-- Historical Map Overlay Controls -->
+        <div class="header-section">
+            <label>Map:</label>
+            <select id="historicalMapSelect" onchange="updateHistoricalOverlay()">
+                <option value="">Modern (none)</option>
+                <option value="air1947">1947 Aerial</option>
+                <option value="kv1904">1904 Map</option>
+                <option value="kv1880">1880 Kartverket</option>
+            </select>
+            <button class="btn-secondary" onclick="nextHistoricalMap()">Next Map</button>
+        </div>
+
+        <div class="header-section" id="overlayControls" style="display: none;">
+            <label>Opacity:</label>
+            <input type="range" id="overlayOpacity" min="0" max="100" value="60"
+                   oninput="updateOverlayOpacity()" style="width: 100px;">
+            <output id="opacityValue">60%</output>
+            <button class="btn-secondary" id="toggleOverlayBtn" onclick="toggleOverlay()">Hide</button>
+        </div>
+
+        <div class="spacer"></div>
+
+        <button class="btn-secondary" onclick="loadFromServer()">Load from Server</button>
+        <button class="btn-primary" onclick="exportGeoJSON()">Export GeoJSON</button>
+        <button class="btn-secondary" onclick="clearLocalStorage()">Clear Cache</button>
+    </header>
+
+    <div class="main-container">
+        <div id="map"></div>
+
+        <div class="sidebar">
+            <!-- Workflow Status Panel -->
+            <div class="sidebar-section">
+                <h3>Workflow Status</h3>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-label">Total Features</div>
+                        <div class="stat-value" id="statTotal">0</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">From OSM</div>
+                        <div class="stat-value" id="statOSM">0</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Still Exists</div>
+                        <div class="stat-value" id="statExists">0</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Pre-1900</div>
+                        <div class="stat-value" id="statPre1900">0</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">1900-1950</div>
+                        <div class="stat-value" id="stat1900to1950">0</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Post-1950</div>
+                        <div class="stat-value" id="statPost1950">0</div>
+                    </div>
+                </div>
+                <div style="margin-top: 10px; font-size: 0.75rem; color: #888;">
+                    Last modified: <span id="lastModified">Never</span>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="workflow-hint">
+                    <p><strong>1.</strong> Select historical map overlay</p>
+                    <p><strong>2.</strong> Draw or import water features</p>
+                    <p><strong>3.</strong> Mark demolished features with end dates</p>
+                    <p><strong>4.</strong> Export when complete</p>
+                </div>
+            </div>
+
+            <!-- Selection and Mode Controls -->
+            <div class="sidebar-section">
+                <h3>Edit Modes</h3>
+                <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+                    <button id="splitModeBtn" class="btn-secondary" onclick="toggleSplitMode()">
+                        Split Mode: OFF
+                    </button>
+                    <button id="multiSelectBtn" class="btn-secondary" onclick="toggleMultiSelect()">
+                        Multi-Select: OFF
+                    </button>
+                </div>
+                <div id="multiSelectActions" style="display: none;">
+                    <button class="btn-warning" onclick="openBatchUpdateModal()" style="width: 100%;">
+                        Batch Update (<span id="selectedCount">0</span> selected)
+                    </button>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Feature Attributes</h3>
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" id="featureName" placeholder="e.g., Nidelva, Trondheim Fjord">
+                </div>
+                <div class="form-group">
+                    <label>Type</label>
+                    <select id="featureType">
+                        <option value="">-- Select Type --</option>
+                        <option value="river">River</option>
+                        <option value="fjord">Fjord</option>
+                        <option value="lake">Lake</option>
+                        <option value="canal">Canal</option>
+                        <option value="harbor">Harbor</option>
+                        <option value="pond">Pond</option>
+                        <option value="stream">Stream</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Source</label>
+                    <select id="featureSource">
+                        <option value="man">Manual (man)</option>
+                        <option value="osm">OpenStreetMap (osm)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Map Source (which map revealed this)</label>
+                    <select id="featureMapSrc">
+                        <option value="">-- Not specified --</option>
+                        <option value="osm">Modern OSM</option>
+                        <option value="air1947">1947 Aerial</option>
+                        <option value="kv1904">1904 Map</option>
+                        <option value="kv1880">1880 Kartverket</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Start Date (sd)</label>
+                    <input type="number" id="featureStartDate" value="1700" placeholder="1700">
+                </div>
+                <div class="form-group">
+                    <label>End Date (ed) - Leave empty if still exists</label>
+                    <input type="number" id="featureEndDate" placeholder="e.g., 1950">
+                </div>
+                <div class="form-group">
+                    <label>Evidence</label>
+                    <select id="featureEvidence">
+                        <option value="h">High (h) - Well documented</option>
+                        <option value="m">Medium (m) - Some evidence</option>
+                        <option value="l">Low (l) - Estimated</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea id="featureNotes" placeholder="Additional information..."></textarea>
+                </div>
+                <div class="form-group" id="osmIdGroup" style="display: none;">
+                    <label>OSM ID</label>
+                    <input type="text" id="featureOSMId" readonly style="background: #0f3460;">
+                </div>
+                <div class="form-group" id="parentIdGroup" style="display: none;">
+                    <label>Parent ID (from split)</label>
+                    <input type="text" id="featureParentId" readonly style="background: #0f3460;">
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn-primary" onclick="saveCurrentFeature()" style="flex: 1;">Save Feature</button>
+                    <button class="btn-danger" onclick="deleteCurrentFeature()">Delete</button>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h3>Water Bodies (<span id="featureCount">0</span>)</h3>
+                    <button class="btn-danger" onclick="clearAllFeatures()" style="padding: 4px 8px; font-size: 0.75rem;">Clear All</button>
+                </div>
+            </div>
+
+            <div class="feature-list" id="featureList">
+                <div class="empty-state">
+                    <p>No water features traced yet</p>
+                    <p style="font-size: 0.8rem;">Use the drawing tools or import from OSM</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="status-bar">
+        <span id="statusText">Select a map overlay and start drawing water features</span>
+        <span id="cursorCoords"></span>
+    </div>
+
+    <!-- Batch Update Modal -->
+    <div id="batchUpdateModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Batch Update</h2>
+                <span class="close" onclick="closeBatchUpdateModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>End Date (ed) - Leave empty to not change</label>
+                    <input type="number" id="batchEndDate" placeholder="e.g., 1950">
+                </div>
+                <div class="form-group">
+                    <label>Map Source - Leave empty to not change</label>
+                    <select id="batchMapSrc">
+                        <option value="">-- Don't change --</option>
+                        <option value="osm">Modern OSM</option>
+                        <option value="air1947">1947 Aerial</option>
+                        <option value="kv1904">1904 Map</option>
+                        <option value="kv1880">1880 Kartverket</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Evidence - Leave empty to not change</label>
+                    <select id="batchEvidence">
+                        <option value="">-- Don't change --</option>
+                        <option value="h">High (h)</option>
+                        <option value="m">Medium (m)</option>
+                        <option value="l">Low (l)</option>
+                    </select>
+                </div>
+                <p style="color: #888; font-size: 0.85rem; margin-top: 10px;">
+                    This will update <strong id="batchCount">0</strong> selected features.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeBatchUpdateModal()">Cancel</button>
+                <button class="btn-primary" onclick="applyBatchUpdate()">Apply</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let map;
+        let drawnItems;
+        let currentFeature = null;
+        let currentLayer = null;
+        let features = [];
+        let featureCounter = 0;
+        let overlayLayer = null;
+        let overlayVisible = true;
+        let currentOverlayMap = '';
+        let splitModeActive = false;
+        let multiSelectActive = false;
+        let selectedFeatures = new Set();
+
+        // Map configuration
+        const historicalMaps = {
+            'air1947': {
+                name: '1947 Aerial',
+                url: null, // Placeholder - would need actual tile URL
+                opacity: 0.6
+            },
+            'kv1904': {
+                name: '1904 Map',
+                url: null,
+                opacity: 0.6
+            },
+            'kv1880': {
+                name: '1880 Kartverket',
+                url: null,
+                opacity: 0.6
+            }
+        };
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            initMap();
+            loadFromLocalStorage();
+            updateStats();
+            setStatus('Ready - import OSM water or start drawing');
+        });
+
+        function initMap() {
+            // Create map centered on Trondheim
+            map = L.map('map').setView([63.43, 10.39], 13);
+
+            // Base OSM layer
+            const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(map);
+
+            // Initialize feature group for drawn items
+            drawnItems = new L.FeatureGroup();
+            map.addLayer(drawnItems);
+
+            // Initialize drawing controls
+            const drawControl = new L.Control.Draw({
+                position: 'topleft',
+                draw: {
+                    polygon: {
+                        allowIntersection: false,
+                        showArea: true,
+                        shapeOptions: {
+                            color: '#2980b9',
+                            fillColor: '#3498db',
+                            fillOpacity: 0.5,
+                            weight: 2
+                        }
+                    },
+                    polyline: false,
+                    rectangle: false,
+                    circle: false,
+                    marker: false,
+                    circlemarker: false
+                },
+                edit: {
+                    featureGroup: drawnItems,
+                    remove: true
+                }
+            });
+            map.addControl(drawControl);
+
+            // Event handlers
+            map.on(L.Draw.Event.CREATED, onFeatureCreated);
+            map.on(L.Draw.Event.EDITED, onFeaturesEdited);
+            map.on(L.Draw.Event.DELETED, onFeaturesDeleted);
+            map.on('mousemove', updateCursorCoords);
+        }
+
+        function onFeatureCreated(e) {
+            const layer = e.layer;
+            drawnItems.addLayer(layer);
+
+            // Auto-set map_src based on current overlay
+            const mapSrcSelect = document.getElementById('featureMapSrc');
+            if (currentOverlayMap && !mapSrcSelect.value) {
+                mapSrcSelect.value = currentOverlayMap;
+            }
+
+            // Select this feature for editing
+            selectFeature(layer, null);
+
+            // Apply color coding
+            updateLayerStyle(layer, null);
+
+            // Click handler
+            layer.on('click', (evt) => {
+                if (splitModeActive) {
+                    initiateSplit(layer);
+                } else if (multiSelectActive && evt.originalEvent.ctrlKey) {
+                    toggleFeatureSelection(layer);
+                } else {
+                    selectFeatureFromLayer(layer);
+                }
+            });
+
+            setStatus('Feature drawn - fill in attributes and click Save');
+        }
+
+        function onFeaturesEdited(e) {
+            const layers = e.layers;
+            layers.eachLayer((layer) => {
+                // Update geometry in features array
+                const feature = features.find(f => f.layer === layer);
+                if (feature) {
+                    feature.geometry = layer.toGeoJSON().geometry;
+                    saveToLocalStorage();
+                }
+            });
+            setStatus('Features updated');
+        }
+
+        function onFeaturesDeleted(e) {
+            const layers = e.layers;
+            layers.eachLayer((layer) => {
+                // Remove from features array
+                const index = features.findIndex(f => f.layer === layer);
+                if (index >= 0) {
+                    features.splice(index, 1);
+                }
+                selectedFeatures.delete(layer);
+            });
+            updateFeatureList();
+            updateStats();
+            saveToLocalStorage();
+            setStatus('Features deleted');
+        }
+
+        function selectFeature(layer, feature) {
+            // Clear multi-selection when selecting single feature
+            if (!multiSelectActive) {
+                selectedFeatures.clear();
+            }
+
+            // Deselect current
+            if (currentLayer) {
+                updateLayerStyle(currentLayer, features.find(f => f.layer === currentLayer));
+            }
+
+            currentLayer = layer;
+            currentFeature = feature;
+
+            // Highlight selected
+            if (layer) {
+                layer.setStyle({
+                    color: '#f39c12',
+                    fillColor: '#f1c40f',
+                    fillOpacity: 0.6,
+                    weight: 3
+                });
+            }
+
+            // Populate form
+            if (feature) {
+                document.getElementById('featureName').value = feature.name || '';
+                document.getElementById('featureType').value = feature.type || '';
+                document.getElementById('featureSource').value = feature.src || 'man';
+                document.getElementById('featureMapSrc').value = feature.map_src || '';
+                document.getElementById('featureStartDate').value = feature.sd || 1700;
+                document.getElementById('featureEndDate').value = feature.ed || '';
+                document.getElementById('featureEvidence').value = feature.ev || 'h';
+                document.getElementById('featureNotes').value = feature.notes || '';
+
+                // Show OSM ID if present
+                if (feature.osm_id) {
+                    document.getElementById('featureOSMId').value = feature.osm_id;
+                    document.getElementById('osmIdGroup').style.display = 'block';
+                } else {
+                    document.getElementById('osmIdGroup').style.display = 'none';
+                }
+
+                // Show Parent ID if present
+                if (feature.parent_id) {
+                    document.getElementById('featureParentId').value = feature.parent_id;
+                    document.getElementById('parentIdGroup').style.display = 'block';
+                } else {
+                    document.getElementById('parentIdGroup').style.display = 'none';
+                }
+            } else {
+                // Clear form for new feature
+                document.getElementById('featureName').value = '';
+                document.getElementById('featureType').value = '';
+                document.getElementById('featureSource').value = 'man';
+                document.getElementById('featureMapSrc').value = currentOverlayMap || '';
+                document.getElementById('featureStartDate').value = 1700;
+                document.getElementById('featureEndDate').value = '';
+                document.getElementById('featureEvidence').value = 'h';
+                document.getElementById('featureNotes').value = '';
+                document.getElementById('osmIdGroup').style.display = 'none';
+                document.getElementById('parentIdGroup').style.display = 'none';
+            }
+
+            updateFeatureList();
+        }
+
+        function selectFeatureFromLayer(layer) {
+            const feature = features.find(f => f.layer === layer);
+            selectFeature(layer, feature);
+        }
+
+        function toggleFeatureSelection(layer) {
+            if (selectedFeatures.has(layer)) {
+                selectedFeatures.delete(layer);
+                const feature = features.find(f => f.layer === layer);
+                updateLayerStyle(layer, feature);
+            } else {
+                selectedFeatures.add(layer);
+                layer.setStyle({
+                    color: '#d35400',
+                    fillColor: '#e67e22',
+                    fillOpacity: 0.6,
+                    weight: 3
+                });
+            }
+            updateFeatureList();
+            document.getElementById('selectedCount').textContent = selectedFeatures.size;
+        }
+
+        function updateLayerStyle(layer, feature) {
+            if (!layer) return;
+
+            // Check if it's in multi-selection
+            if (selectedFeatures.has(layer)) {
+                layer.setStyle({
+                    color: '#d35400',
+                    fillColor: '#e67e22',
+                    fillOpacity: 0.6,
+                    weight: 3
+                });
+                return;
+            }
+
+            // Color coding based on temporal status
+            let fillColor = '#3498db'; // Default blue (exists)
+            let color = '#2980b9';
+
+            if (feature && feature.ed !== null && feature.ed !== undefined) {
+                // Has end date - demolished/filled
+                fillColor = '#e74c3c'; // Red
+                color = '#c0392b';
+            }
+
+            // Adjust opacity based on evidence
+            let fillOpacity = 0.5;
+            if (feature) {
+                if (feature.ev === 'h') fillOpacity = 0.6;
+                else if (feature.ev === 'm') fillOpacity = 0.5;
+                else if (feature.ev === 'l') fillOpacity = 0.4;
+            }
+
+            layer.setStyle({
+                color: color,
+                fillColor: fillColor,
+                fillOpacity: fillOpacity,
+                weight: 2
+            });
+        }
+
+        function saveCurrentFeature() {
+            if (!currentLayer) {
+                setStatus('No feature selected - draw a polygon first');
+                return;
+            }
+
+            const name = document.getElementById('featureName').value.trim();
+            const type = document.getElementById('featureType').value;
+            const src = document.getElementById('featureSource').value;
+            const map_src = document.getElementById('featureMapSrc').value;
+            const sd = parseInt(document.getElementById('featureStartDate').value);
+            const edValue = document.getElementById('featureEndDate').value;
+            const ed = edValue ? parseInt(edValue) : null;
+            const ev = document.getElementById('featureEvidence').value;
+            const notes = document.getElementById('featureNotes').value.trim();
+
+            if (!name) {
+                alert('Please enter a name for the water feature');
+                return;
+            }
+
+            if (!type) {
+                alert('Please select a type for the water feature');
+                return;
+            }
+
+            // Update or create feature
+            if (currentFeature) {
+                // Update existing
+                currentFeature.name = name;
+                currentFeature.type = type;
+                currentFeature.src = src;
+                currentFeature.map_src = map_src;
+                currentFeature.sd = sd;
+                currentFeature.ed = ed;
+                currentFeature.ev = ev;
+                currentFeature.notes = notes;
+                currentFeature.geometry = currentLayer.toGeoJSON().geometry;
+            } else {
+                // Create new
+                featureCounter++;
+                const feature = {
+                    id: `water_${featureCounter}`,
+                    name: name,
+                    type: type,
+                    src: src,
+                    map_src: map_src,
+                    sd: sd,
+                    ed: ed,
+                    ev: ev,
+                    notes: notes,
+                    geometry: currentLayer.toGeoJSON().geometry,
+                    layer: currentLayer
+                };
+                features.push(feature);
+                currentFeature = feature;
+            }
+
+            // Update layer style based on new properties
+            updateLayerStyle(currentLayer, currentFeature);
+
+            updateFeatureList();
+            updateStats();
+            saveToLocalStorage();
+            setStatus(`Saved: ${name} (${type})`);
+        }
+
+        function deleteCurrentFeature() {
+            if (!currentFeature) {
+                setStatus('No feature selected');
+                return;
+            }
+
+            if (!confirm(`Delete "${currentFeature.name}"?`)) {
+                return;
+            }
+
+            // Remove from map
+            if (currentFeature.layer) {
+                drawnItems.removeLayer(currentFeature.layer);
+                selectedFeatures.delete(currentFeature.layer);
+            }
+
+            // Remove from features array
+            const index = features.findIndex(f => f.id === currentFeature.id);
+            if (index >= 0) {
+                features.splice(index, 1);
+            }
+
+            currentFeature = null;
+            currentLayer = null;
+
+            updateFeatureList();
+            updateStats();
+            saveToLocalStorage();
+            setStatus('Feature deleted');
+        }
+
+        function clearAllFeatures() {
+            if (features.length === 0) return;
+            if (!confirm(`Delete all ${features.length} water features?`)) return;
+
+            // Remove all from map
+            drawnItems.clearLayers();
+
+            features = [];
+            featureCounter = 0;
+            currentFeature = null;
+            currentLayer = null;
+            selectedFeatures.clear();
+
+            updateFeatureList();
+            updateStats();
+            saveToLocalStorage();
+            setStatus('All features cleared');
+        }
+
+        function updateFeatureList() {
+            const list = document.getElementById('featureList');
+            document.getElementById('featureCount').textContent = features.length;
+
+            if (features.length === 0) {
+                list.innerHTML = `
+                    <div class="empty-state">
+                        <p>No water features traced yet</p>
+                        <p style="font-size: 0.8rem;">Use the drawing tools or import from OSM</p>
+                    </div>
+                `;
+                return;
+            }
+
+            list.innerHTML = features.map((feature, index) => {
+                const isSelected = currentFeature && currentFeature.id === feature.id;
+                const isMultiSelected = selectedFeatures.has(feature.layer);
+                const dateRange = feature.ed ? `${feature.sd}-${feature.ed}` : `${feature.sd}-present`;
+                const className = isSelected ? 'selected' : (isMultiSelected ? 'multi-selected' : '');
+                const checkboxHtml = multiSelectActive ?
+                    `<input type="checkbox" class="feature-item-checkbox" ${isMultiSelected ? 'checked' : ''}
+                            onclick="event.stopPropagation(); toggleFeatureSelectionById('${feature.id}')">` : '';
+                const hasCheckbox = multiSelectActive ? 'has-checkbox' : '';
+
+                return `
+                    <div class="feature-item ${className} ${hasCheckbox}" onclick="selectFeatureById('${feature.id}')">
+                        ${checkboxHtml}
+                        <div class="feature-item-header">
+                            <span class="feature-item-name">${feature.name}</span>
+                            <span class="feature-item-type">${feature.type}</span>
+                        </div>
+                        <div class="feature-item-dates">
+                            ${dateRange} | ${feature.src || 'man'} | ev: ${feature.ev}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function selectFeatureById(id) {
+            const feature = features.find(f => f.id === id);
+            if (feature) {
+                selectFeature(feature.layer, feature);
+
+                // Pan to feature
+                if (feature.layer) {
+                    const bounds = feature.layer.getBounds();
+                    map.fitBounds(bounds, { padding: [50, 50] });
+                }
+            }
+        }
+
+        function toggleFeatureSelectionById(id) {
+            const feature = features.find(f => f.id === id);
+            if (feature && feature.layer) {
+                toggleFeatureSelection(feature.layer);
+            }
+        }
+
+        function updateStats() {
+            const total = features.length;
+            const osm = features.filter(f => f.src === 'osm').length;
+            const exists = features.filter(f => !f.ed).length;
+            const pre1900 = features.filter(f => f.ed && f.ed < 1900).length;
+            const era1900to1950 = features.filter(f => f.ed && f.ed >= 1900 && f.ed <= 1950).length;
+            const post1950 = features.filter(f => f.ed && f.ed > 1950).length;
+
+            document.getElementById('statTotal').textContent = total;
+            document.getElementById('statOSM').textContent = osm;
+            document.getElementById('statExists').textContent = exists;
+            document.getElementById('statPre1900').textContent = pre1900;
+            document.getElementById('stat1900to1950').textContent = era1900to1950;
+            document.getElementById('statPost1950').textContent = post1950;
+
+            const now = new Date().toLocaleString();
+            document.getElementById('lastModified').textContent = total > 0 ? now : 'Never';
+        }
+
+        function exportGeoJSON() {
+            if (features.length === 0) {
+                alert('No features to export');
+                return;
+            }
+
+            const geojson = {
+                type: 'FeatureCollection',
+                features: features.map(f => ({
+                    type: 'Feature',
+                    properties: {
+                        name: f.name,
+                        type: f.type,
+                        sd: f.sd,
+                        ed: f.ed,
+                        ev: f.ev,
+                        notes: f.notes,
+                        src: f.src || 'man',
+                        map_src: f.map_src || null,
+                        osm_id: f.osm_id || null,
+                        parent_id: f.parent_id || null
+                    },
+                    geometry: f.geometry
+                }))
+            };
+
+            const blob = new Blob([JSON.stringify(geojson, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `water_features_${new Date().toISOString().split('T')[0]}.geojson`;
+            a.click();
+            URL.revokeObjectURL(url);
+
+            setStatus(`Exported ${features.length} features to GeoJSON`);
+        }
+
+        async function importOSMWater() {
+            if (!confirm('Import water features from OSM? This will fetch data for the current map view.')) {
+                return;
+            }
+
+            setStatus('Importing OSM water features...');
+
+            try {
+                const bounds = map.getBounds();
+                const bbox = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
+
+                const response = await fetch(`/api/water/import-osm?bbox=${bbox}`, {
+                    method: 'POST'
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+
+                if (data.features && data.features.length > 0) {
+                    const preview = `Found ${data.features.length} water features from OSM.\n\nImport these features?`;
+
+                    if (confirm(preview)) {
+                        loadGeoJSON(data);
+                        setStatus(`Imported ${data.features.length} features from OSM`);
+                    } else {
+                        setStatus('Import cancelled');
+                    }
+                } else {
+                    alert('No water features found in this area');
+                    setStatus('No OSM features found');
+                }
+            } catch (err) {
+                console.error('OSM import error:', err);
+                alert(`Failed to import from OSM: ${err.message}\n\nNote: This requires the API endpoint /api/water/import-osm to be implemented.`);
+                setStatus('Import failed - API endpoint not available');
+            }
+        }
+
+        function loadFromServer() {
+            // Try to load existing water features from server
+            const url = '../data/sources/manual/water_temporal.geojson';
+
+            fetch(url)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('File not found');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    loadGeoJSON(data);
+                    setStatus(`Loaded ${data.features.length} features from server`);
+                })
+                .catch(err => {
+                    setStatus('No existing features found on server');
+                    console.log('Load error:', err);
+                });
+        }
+
+        function loadGeoJSON(geojson) {
+            // Clear existing
+            drawnItems.clearLayers();
+            features = [];
+            featureCounter = 0;
+            selectedFeatures.clear();
+
+            // Add features
+            geojson.features.forEach((feature, index) => {
+                featureCounter++;
+
+                const layer = L.geoJSON(feature.geometry, {
+                    style: {
+                        color: '#2980b9',
+                        fillColor: '#3498db',
+                        fillOpacity: 0.5,
+                        weight: 2
+                    }
+                });
+
+                const polygon = layer.getLayers()[0];
+                drawnItems.addLayer(polygon);
+
+                const featureObj = {
+                    id: `water_${featureCounter}`,
+                    name: feature.properties.name || `Water ${featureCounter}`,
+                    type: feature.properties.type || '',
+                    src: feature.properties.src || 'man',
+                    map_src: feature.properties.map_src || null,
+                    sd: feature.properties.sd || 1700,
+                    ed: feature.properties.ed || null,
+                    ev: feature.properties.ev || 'h',
+                    notes: feature.properties.notes || '',
+                    osm_id: feature.properties.osm_id || null,
+                    parent_id: feature.properties.parent_id || null,
+                    geometry: feature.geometry,
+                    layer: polygon
+                };
+
+                features.push(featureObj);
+
+                // Apply color coding
+                updateLayerStyle(polygon, featureObj);
+
+                // Add click handler
+                polygon.on('click', (evt) => {
+                    if (splitModeActive) {
+                        initiateSplit(polygon);
+                    } else if (multiSelectActive && evt.originalEvent.ctrlKey) {
+                        toggleFeatureSelection(polygon);
+                    } else {
+                        selectFeatureFromLayer(polygon);
+                    }
+                });
+            });
+
+            updateFeatureList();
+            updateStats();
+            saveToLocalStorage();
+
+            // Fit map to features
+            if (drawnItems.getLayers().length > 0) {
+                map.fitBounds(drawnItems.getBounds(), { padding: [50, 50] });
+            }
+        }
+
+        function saveToLocalStorage() {
+            const data = {
+                features: features.map(f => ({
+                    id: f.id,
+                    name: f.name,
+                    type: f.type,
+                    src: f.src,
+                    map_src: f.map_src,
+                    sd: f.sd,
+                    ed: f.ed,
+                    ev: f.ev,
+                    notes: f.notes,
+                    osm_id: f.osm_id,
+                    parent_id: f.parent_id,
+                    geometry: f.geometry
+                })),
+                counter: featureCounter
+            };
+            localStorage.setItem('water_editor_data', JSON.stringify(data));
+        }
+
+        function loadFromLocalStorage() {
+            const stored = localStorage.getItem('water_editor_data');
+            if (!stored) return;
+
+            try {
+                const data = JSON.parse(stored);
+                featureCounter = data.counter || 0;
+
+                // Reconstruct features
+                data.features.forEach(f => {
+                    const layer = L.geoJSON(f.geometry, {
+                        style: {
+                            color: '#2980b9',
+                            fillColor: '#3498db',
+                            fillOpacity: 0.5,
+                            weight: 2
+                        }
+                    });
+
+                    const polygon = layer.getLayers()[0];
+                    drawnItems.addLayer(polygon);
+
+                    const featureObj = {
+                        id: f.id,
+                        name: f.name,
+                        type: f.type,
+                        src: f.src || 'man',
+                        map_src: f.map_src || null,
+                        sd: f.sd,
+                        ed: f.ed,
+                        ev: f.ev,
+                        notes: f.notes,
+                        osm_id: f.osm_id || null,
+                        parent_id: f.parent_id || null,
+                        geometry: f.geometry,
+                        layer: polygon
+                    };
+
+                    features.push(featureObj);
+
+                    // Apply color coding
+                    updateLayerStyle(polygon, featureObj);
+
+                    // Add click handler
+                    polygon.on('click', (evt) => {
+                        if (splitModeActive) {
+                            initiateSplit(polygon);
+                        } else if (multiSelectActive && evt.originalEvent.ctrlKey) {
+                            toggleFeatureSelection(polygon);
+                        } else {
+                            selectFeatureFromLayer(polygon);
+                        }
+                    });
+                });
+
+                updateFeatureList();
+                setStatus(`Loaded ${features.length} features from cache`);
+            } catch (err) {
+                console.error('Failed to load from localStorage:', err);
+            }
+        }
+
+        function clearLocalStorage() {
+            if (!confirm('Clear cached data? (Features will remain on map)')) return;
+            localStorage.removeItem('water_editor_data');
+            setStatus('Cache cleared');
+        }
+
+        function updateHistoricalOverlay() {
+            const mapId = document.getElementById('historicalMapSelect').value;
+            currentOverlayMap = mapId;
+
+            // Remove existing overlay
+            if (overlayLayer) {
+                map.removeLayer(overlayLayer);
+                overlayLayer = null;
+            }
+
+            if (!mapId) {
+                document.getElementById('overlayControls').style.display = 'none';
+                setStatus('Using modern OSM basemap');
+                return;
+            }
+
+            const mapConfig = historicalMaps[mapId];
+            if (!mapConfig) return;
+
+            // Show overlay controls
+            document.getElementById('overlayControls').style.display = 'flex';
+
+            if (mapConfig.url) {
+                // Load actual overlay if URL is available
+                overlayLayer = L.tileLayer(mapConfig.url, {
+                    opacity: parseFloat(document.getElementById('overlayOpacity').value) / 100,
+                    maxZoom: 19
+                }).addTo(map);
+                overlayVisible = true;
+                setStatus(`Loaded: ${mapConfig.name}`);
+            } else {
+                // Placeholder message
+                setStatus(`${mapConfig.name} - Overlay tiles not configured (add tile URL to historicalMaps config)`);
+            }
+
+            updateOverlayOpacity();
+        }
+
+        function nextHistoricalMap() {
+            const select = document.getElementById('historicalMapSelect');
+            const options = Array.from(select.options);
+            const currentIndex = options.findIndex(opt => opt.value === select.value);
+            const nextIndex = (currentIndex + 1) % options.length;
+            select.value = options[nextIndex].value;
+            updateHistoricalOverlay();
+        }
+
+        function updateOverlayOpacity() {
+            const opacity = parseFloat(document.getElementById('overlayOpacity').value) / 100;
+            document.getElementById('opacityValue').textContent = `${Math.round(opacity * 100)}%`;
+
+            if (overlayLayer) {
+                overlayLayer.setOpacity(opacity);
+            }
+        }
+
+        function toggleOverlay() {
+            if (!overlayLayer) return;
+
+            overlayVisible = !overlayVisible;
+            const btn = document.getElementById('toggleOverlayBtn');
+
+            if (overlayVisible) {
+                map.addLayer(overlayLayer);
+                btn.textContent = 'Hide';
+            } else {
+                map.removeLayer(overlayLayer);
+                btn.textContent = 'Show';
+            }
+        }
+
+        function toggleSplitMode() {
+            splitModeActive = !splitModeActive;
+            const btn = document.getElementById('splitModeBtn');
+
+            if (splitModeActive) {
+                btn.textContent = 'Split Mode: ON';
+                btn.className = 'btn-active';
+                setStatus('Split mode active - click a polygon to split it');
+            } else {
+                btn.textContent = 'Split Mode: OFF';
+                btn.className = 'btn-secondary';
+                setStatus('Split mode disabled');
+            }
+        }
+
+        function toggleMultiSelect() {
+            multiSelectActive = !multiSelectActive;
+            const btn = document.getElementById('multiSelectBtn');
+            const actions = document.getElementById('multiSelectActions');
+
+            if (multiSelectActive) {
+                btn.textContent = 'Multi-Select: ON';
+                btn.className = 'btn-active';
+                actions.style.display = 'block';
+                setStatus('Multi-select active - Ctrl+click to select multiple features');
+            } else {
+                btn.textContent = 'Multi-Select: OFF';
+                btn.className = 'btn-secondary';
+                actions.style.display = 'none';
+
+                // Clear selection and restore styles
+                selectedFeatures.forEach(layer => {
+                    const feature = features.find(f => f.layer === layer);
+                    updateLayerStyle(layer, feature);
+                });
+                selectedFeatures.clear();
+                setStatus('Multi-select disabled');
+            }
+
+            updateFeatureList();
+        }
+
+        function initiateSplit(layer) {
+            alert('Split tool not yet implemented.\n\nTo split a polygon:\n1. Use external GIS tool (QGIS)\n2. Or manually draw two new polygons\n3. Delete the original\n4. Set parent_id on both new features');
+            setStatus('Split tool - use external GIS or manual drawing');
+        }
+
+        function openBatchUpdateModal() {
+            if (selectedFeatures.size === 0) {
+                alert('No features selected. Use Ctrl+click to select multiple features.');
+                return;
+            }
+
+            document.getElementById('batchCount').textContent = selectedFeatures.size;
+            document.getElementById('batchEndDate').value = '';
+            document.getElementById('batchMapSrc').value = '';
+            document.getElementById('batchEvidence').value = '';
+            document.getElementById('batchUpdateModal').style.display = 'block';
+        }
+
+        function closeBatchUpdateModal() {
+            document.getElementById('batchUpdateModal').style.display = 'none';
+        }
+
+        function applyBatchUpdate() {
+            const endDate = document.getElementById('batchEndDate').value;
+            const mapSrc = document.getElementById('batchMapSrc').value;
+            const evidence = document.getElementById('batchEvidence').value;
+
+            if (!endDate && !mapSrc && !evidence) {
+                alert('Please set at least one field to update');
+                return;
+            }
+
+            let count = 0;
+            selectedFeatures.forEach(layer => {
+                const feature = features.find(f => f.layer === layer);
+                if (feature) {
+                    if (endDate) {
+                        feature.ed = parseInt(endDate);
+                    }
+                    if (mapSrc) {
+                        feature.map_src = mapSrc;
+                    }
+                    if (evidence) {
+                        feature.ev = evidence;
+                    }
+                    updateLayerStyle(layer, feature);
+                    count++;
+                }
+            });
+
+            closeBatchUpdateModal();
+            updateFeatureList();
+            updateStats();
+            saveToLocalStorage();
+            setStatus(`Updated ${count} features`);
+        }
+
+        function updateCursorCoords(e) {
+            const lat = e.latlng.lat.toFixed(5);
+            const lng = e.latlng.lng.toFixed(5);
+            document.getElementById('cursorCoords').textContent = `Lat: ${lat}, Lng: ${lng}`;
+        }
+
+        function setStatus(text) {
+            document.getElementById('statusText').textContent = text;
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('batchUpdateModal');
+            if (event.target === modal) {
+                closeBatchUpdateModal();
+            }
+        }
+    </script>
+</body>
+</html>

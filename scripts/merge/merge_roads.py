@@ -33,6 +33,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+# Import geographic context for coordinate conversions
+try:
+    from constants import GEO
+except ImportError:
+    # Fallback if constants not available
+    class _FallbackGeo:
+        avg_meters_per_degree = 80000
+        def meters_to_degrees(self, m): return m / 80000
+        def degrees_to_meters(self, d): return d * 80000
+    GEO = _FallbackGeo()
+
 # Optional: Use shapely for spatial operations if available
 try:
     from shapely.geometry import shape, mapping, LineString, MultiLineString
@@ -95,7 +106,7 @@ def calculate_hausdorff_distance(geom1: Dict, geom2: Dict) -> float:
 
         # Convert to approximate meters at Trondheim latitude (~63°N)
         # 1 degree latitude ≈ 111km, 1 degree longitude ≈ 50km at 63°N
-        dist_m = dist_deg * 80000  # Average approximation
+        dist_m = GEO.degrees_to_meters(dist_deg)
 
         return dist_m
 
@@ -126,7 +137,7 @@ def calculate_buffer_overlap(geom1: Dict, geom2: Dict, buffer_m: float = 10) -> 
             return 0.0
 
         # Convert buffer from meters to degrees (approximate)
-        buffer_deg = buffer_m / 80000
+        buffer_deg = GEO.meters_to_degrees(buffer_m)
 
         # Buffer both lines
         buffer1 = shape1.buffer(buffer_deg)
@@ -193,7 +204,7 @@ def build_spatial_index(features: List[Dict], buffer_m: float = 20) -> Optional[
     if not features:
         return None
 
-    buffer_deg = buffer_m / 80000  # Approximate conversion
+    buffer_deg = GEO.meters_to_degrees(buffer_m)
 
     geometries = []
     indexed_features = []
@@ -300,7 +311,7 @@ def find_road_matches(
                 return matches
 
             # Query index for candidates
-            buffer_deg = matching_config.get('buffer_distance_m', 20) / 80000
+            buffer_deg = GEO.meters_to_degrees(matching_config.get('buffer_distance_m', 20))
             query_buffered = query_shape.buffer(buffer_deg)
             candidate_indices = index.query(query_buffered)
 
@@ -536,8 +547,8 @@ def infer_dates_from_buildings(
             for idx in candidate_indices:
                 building_centroid = building_centroids[idx]
 
-                # Calculate actual distance
-                dist_m = geom.distance(building_centroid) * 80000  # Approx conversion to meters
+                # Calculate actual distance using GeoContext
+                dist_m = GEO.degrees_to_meters(geom.distance(building_centroid))
 
                 if dist_m <= buffer_m:
                     building_sd = dated_buildings[idx]['properties']['sd']

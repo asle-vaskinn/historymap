@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from constants import (
     DATE_FALLBACK,
     NEAREST_K_DONORS,
+    GEO,
     determine_era,
     check_evidence_meets_threshold
 )
@@ -415,6 +416,7 @@ def inherit_dates_from_neighbors(
     recipients = []
     donor_coords = []  # List of (x, y) tuples for KDTree
     donor_dates = []   # Corresponding dates
+    donor_ids = []     # Corresponding building IDs for highlighting
 
     for f in features:
         props = f.get('properties', {})
@@ -422,17 +424,24 @@ def inherit_dates_from_neighbors(
         date_src = props.get('sd_src', props.get('_src', ''))
         ev = props.get('ev', '')
 
-        # Donor must: have evidence (h or m), have a date, NOT from excluded sources
+        # Check if date source is in exclude list
+        # Only check sd_src (where the date came from), not src_all (all sources for geometry)
+        # This allows FINN buildings with OSM geometry to still donate dates
+        has_excluded_source = date_src in exclude_sources
+
+        # Donor must: have evidence (h or m), have a date, NOT from excluded date source
         if (ev in ('h', 'm') and
             props.get('sd') is not None and
-            date_src not in exclude_sources):
+            not has_excluded_source):
             # Get centroid for spatial indexing
             try:
                 geom = shape(f['geometry'])
                 centroid = geom.centroid
-                # Scale coordinates: x by cos(63°) ≈ 0.45 to normalize distances
-                donor_coords.append((centroid.x * 0.45 * 111000, centroid.y * 111000))
+                # Scale coordinates using GeoContext for latitude-aware conversion
+                donor_coords.append((centroid.x * GEO.meters_per_degree_lon, centroid.y * 111000))
                 donor_dates.append(props['sd'])
+                # Store building ID for later highlighting
+                donor_ids.append(props.get('_src_id', ''))
                 donors.append(f)
             except Exception:
                 continue
@@ -460,6 +469,7 @@ def inherit_dates_from_neighbors(
     print(f"  Building KDTree...")
     donor_coords_arr = np.array(donor_coords)
     donor_dates_arr = np.array(donor_dates)
+    donor_ids_arr = np.array(donor_ids)
     tree = cKDTree(donor_coords_arr)
 
     # Get recipient centroids
@@ -472,7 +482,8 @@ def inherit_dates_from_neighbors(
         try:
             geom = shape(recipient['geometry'])
             centroid = geom.centroid
-            recipient_coords.append((centroid.x * 0.45 * 111000, centroid.y * 111000))
+            # Scale coordinates using GeoContext for latitude-aware conversion
+            recipient_coords.append((centroid.x * GEO.meters_per_degree_lon, centroid.y * 111000))
             valid_recipients.append(recipient)
         except Exception:
             # Can't process, use fallback
@@ -498,9 +509,11 @@ def inherit_dates_from_neighbors(
             # Handle case where we have fewer donors than K
             if nearest_k == 1:
                 dates = [donor_dates_arr[nearest_indices]]
+                ids = [donor_ids_arr[nearest_indices]]
                 avg_dist = nearest_distances
             else:
                 dates = donor_dates_arr[nearest_indices].tolist()
+                ids = donor_ids_arr[nearest_indices].tolist()
                 avg_dist = np.mean(nearest_distances)
 
             # Take median
@@ -511,6 +524,7 @@ def inherit_dates_from_neighbors(
             recipient['properties']['sd_inherited'] = True
             recipient['properties']['sd_method'] = 'median'
             recipient['properties']['sd_donors'] = len(dates)
+            recipient['properties']['sd_donor_ids'] = ids  # Store donor IDs for highlighting
             recipient['properties']['sd_avg_dist'] = round(float(avg_dist), 0)
 
     # Calculate stats
@@ -741,6 +755,11 @@ def merge_osm_centric(
         # Set geometry source
         if 'geom_src' not in props:
             props['geom_src'] = 'osm'
+
+        # Set sd_src='osm' for OSM buildings with explicit dates (high evidence)
+        # that weren't matched to any date source
+        if props.get('sd') is not None and props.get('sd_src') is None and props.get('ev') == 'h':
+            props['sd_src'] = 'osm'
 
         merged_features.append({
             'type': 'Feature',
@@ -1318,13 +1337,16 @@ def merge_sources(config_path: Path, output_path: Optional[Path] = None) -> bool
         print(f"Buildings with end dates (replaced/demolished): {replacements}")
 
         # Inherit dates using median of nearest K donors
+        date_inference_config = config.get('date_inference', {})
         inheritance_config = osm_centric_config.get('date_inheritance', {})
         if inheritance_config.get('enabled', True):
             nearest_k = inheritance_config.get('nearest_k', 3)
-            fallback_year = osm_centric_config.get('fallback_year', DATE_FALLBACK)
+            fallback_year = date_inference_config.get('fallback_year', osm_centric_config.get('fallback_year', DATE_FALLBACK))
+            exclude_sources = date_inference_config.get('exclude_sources', ['sefrak'])
             merged_features, inheritance_stats = inherit_dates_from_neighbors(
                 merged_features,
                 nearest_k=nearest_k,
+                exclude_sources=exclude_sources,
                 fallback_year=fallback_year
             )
         else:

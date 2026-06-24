@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature Extraction - Trondheim Historical Map</title>
+
+    <!-- MapLibre GL JS -->
+    <script src="https://unpkg.com/maplibre-gl@4.0.0/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@4.0.0/dist/maplibre-gl.css" rel="stylesheet" />
+
+    <!-- MapLibre GL Draw (compatible fork of mapbox-gl-draw) -->
+    <script src="https://unpkg.com/@mapbox/mapbox-gl-draw@1.4.3/dist/mapbox-gl-draw.js"></script>
+    <link href="https://unpkg.com/@mapbox/mapbox-gl-draw@1.4.3/dist/mapbox-gl-draw.css" rel="stylesheet" />
+
+    <link rel="stylesheet" href="feature_extraction.css">
+</head>
+<body>
+    <!-- Header Bar -->
+    <div class="header">
+        <div class="header-left">
+            <a href="index.html" class="back-link">&larr; Map</a>
+            <h1>Feature Extraction</h1>
+            <a href="source_manager.html" class="back-link" style="margin-left: 15px;">Source Manager →</a>
+            <a href="#" id="viewOnMapLink" class="view-on-map-link" title="View this source on the main map">View on Map →</a>
+        </div>
+        <div class="header-right">
+            <span class="stats" id="stats">Loading...</span>
+            <span class="annotation-stats">
+                <span id="annotationCount">0 annotated</span>
+                <button id="exportBtn" onclick="exportAnnotations()" title="Export annotations">Export</button>
+            </span>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Layer Control Panel (Left) -->
+        <div class="layer-panel">
+            <div class="layer-panel-header">
+                <h2>Layers</h2>
+            </div>
+
+            <!-- Background Layer -->
+            <div class="layer-section">
+                <h3>Background</h3>
+                <div class="layer-radios" id="backgroundLayers">
+                    <label class="layer-radio">
+                        <input type="radio" name="background" value="none">
+                        <span>None (dark)</span>
+                    </label>
+                    <label class="layer-radio">
+                        <input type="radio" name="background" value="positron" checked>
+                        <span>OSM Positron</span>
+                    </label>
+                    <label class="layer-radio">
+                        <input type="radio" name="background" value="dark">
+                        <span>OSM Dark</span>
+                    </label>
+                    <label class="layer-radio">
+                        <input type="radio" name="background" value="ortofoto2023">
+                        <span>Flyfoto 2023</span>
+                    </label>
+                    <label class="layer-radio">
+                        <input type="radio" name="background" value="ortofoto2006">
+                        <span>Flyfoto 2006</span>
+                    </label>
+                    <label class="layer-radio">
+                        <input type="radio" name="background" value="ortofoto1937">
+                        <span>Flyfoto 1937</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Overlay Map Layer -->
+            <div class="layer-section">
+                <h3>Overlay Map</h3>
+                <div class="layer-radios" id="overlayLayers">
+                    <label class="layer-radio">
+                        <input type="radio" name="overlay" value="none" checked>
+                        <span>None</span>
+                    </label>
+                    <label class="layer-radio">
+                        <input type="radio" name="overlay" value="amt1">
+                        <span>Amtskart (1870-1920)</span>
+                    </label>
+                    <label class="layer-radio">
+                        <input type="radio" name="overlay" value="ortofoto1937">
+                        <span>Flyfoto 1937</span>
+                    </label>
+                    <label class="layer-radio">
+                        <input type="radio" name="overlay" value="ortofoto2006">
+                        <span>Flyfoto 2006</span>
+                    </label>
+                    <label class="layer-radio">
+                        <input type="radio" name="overlay" value="ortofoto2023">
+                        <span>Flyfoto 2023</span>
+                    </label>
+                </div>
+                <div class="opacity-control" id="overlayOpacityControl">
+                    <label>Opacity:</label>
+                    <input type="range" id="overlayOpacity" min="0" max="100" value="70">
+                    <span id="overlayOpacityValue">70%</span>
+                </div>
+            </div>
+
+            <!-- Data Overlays -->
+            <div class="layer-section">
+                <h3>Data Overlays</h3>
+                <div class="data-layers" id="dataLayers">
+                    <div class="data-layer-item">
+                        <label class="layer-checkbox">
+                            <input type="checkbox" name="dataLayer" value="sefrak">
+                            <span>SEFRAK Buildings</span>
+                        </label>
+                        <div class="layer-opacity-mini">
+                            <input type="range" class="mini-slider" data-layer="sefrak" min="0" max="100" value="80">
+                        </div>
+                    </div>
+                    <div class="data-layer-item">
+                        <label class="layer-checkbox">
+                            <input type="checkbox" name="dataLayer" value="osm" checked>
+                            <span>OSM Buildings</span>
+                        </label>
+                        <div class="layer-opacity-mini">
+                            <input type="range" class="mini-slider" data-layer="osm" min="0" max="100" value="60">
+                        </div>
+                    </div>
+                    <div class="data-layer-item">
+                        <label class="layer-checkbox">
+                            <input type="checkbox" name="dataLayer" value="ml">
+                            <span>ML Detected</span>
+                        </label>
+                        <div class="layer-opacity-mini">
+                            <input type="range" class="mini-slider" data-layer="ml" min="0" max="100" value="70">
+                        </div>
+                    </div>
+                    <div class="data-layer-item">
+                        <label class="layer-checkbox">
+                            <input type="checkbox" name="dataLayer" value="manual">
+                            <span>Manual Buildings</span>
+                        </label>
+                        <div class="layer-opacity-mini">
+                            <input type="range" class="mini-slider" data-layer="manual" min="0" max="100" value="80">
+                        </div>
+                    </div>
+                    <div class="data-layer-item">
+                        <label class="layer-checkbox">
+                            <input type="checkbox" name="dataLayer" value="roads">
+                            <span>Historical Roads</span>
+                        </label>
+                        <div class="layer-opacity-mini">
+                            <input type="range" class="mini-slider" data-layer="roads" min="0" max="100" value="80">
+                        </div>
+                    </div>
+                    <div class="data-layer-item">
+                        <label class="layer-checkbox">
+                            <input type="checkbox" name="dataLayer" value="finn">
+                            <span>Finn.no Listings</span>
+                        </label>
+                        <div class="layer-opacity-mini">
+                            <input type="range" class="mini-slider" data-layer="finn" min="0" max="100" value="80">
+                        </div>
+                    </div>
+                    <div class="data-layer-item">
+                        <label class="layer-checkbox">
+                            <input type="checkbox" name="dataLayer" value="hist1904">
+                            <span>1904 Detected</span>
+                        </label>
+                        <div class="layer-opacity-mini">
+                            <input type="range" class="mini-slider" data-layer="hist1904" min="0" max="100" value="80">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Legend -->
+            <div class="layer-section legend-section">
+                <h3>Legend</h3>
+                <div class="layer-legend-items">
+                    <span class="legend-item"><span class="legend-color" style="background:#06b6d4"></span> OSM buildings</span>
+                    <span class="legend-item"><span class="legend-color" style="background:#22c55e"></span> SEFRAK</span>
+                    <span class="legend-item"><span class="legend-color" style="background:#f59e0b"></span> ML detected</span>
+                    <span class="legend-item"><span class="legend-color" style="background:#a855f7"></span> Manual</span>
+                    <span class="legend-item"><span class="legend-color" style="background:#FF6B6B"></span> Roads</span>
+                    <span class="legend-item"><span class="legend-color" style="background:#ec4899"></span> Finn.no</span>
+                    <span class="legend-item"><span class="legend-color" style="background:#dc2626"></span> 1904 detected</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- View Container (normal mode: map only, georef mode: split view) -->
+        <div class="view-container" id="viewContainer">
+            <!-- Image Canvas (shown in georef mode) -->
+            <div class="georef-image-panel" id="georefImagePanel" style="display: none;">
+                <div class="image-panel-header">
+                    <span class="panel-title">Historical Map</span>
+                    <span class="panel-hint">Click to place GCP</span>
+                </div>
+                <canvas id="georefCanvas"></canvas>
+            </div>
+            <!-- Map Container -->
+            <div id="map"></div>
+        </div>
+
+        <!-- ML Actions Panel (Right) -->
+        <div class="ml-panel">
+            <div class="ml-panel-header">
+                <h2>ML Pipeline</h2>
+            </div>
+
+            <!-- Training Section -->
+            <div class="ml-section">
+                <h3>Training Data</h3>
+                <div class="ml-stats">
+                    <span id="tilesCount">0</span> tiles
+                </div>
+                <button class="ml-button" id="generateMoreBtn" onclick="generateMoreTraining()">
+                    + Generate More
+                </button>
+            </div>
+
+            <!-- Model Section -->
+            <div class="ml-section">
+                <h3>Model</h3>
+                <div class="ml-stats">
+                    IoU: <span id="modelIoU">-</span>
+                </div>
+                <button class="ml-button primary" id="retrainBtn" onclick="retrain()">
+                    Retrain Model
+                </button>
+            </div>
+
+            <!-- Verification Section -->
+            <div class="ml-section">
+                <h3>Verification</h3>
+                <div class="ml-stats" id="verificationStats">
+                    <div><span style="color:#22c55e">■</span> <span id="existedCount">0</span> existed</div>
+                    <div><span style="color:#eab308">■</span> <span id="lowConfCount">0</span> low confidence</div>
+                    <div><span style="color:#ef4444">■</span> <span id="notExistedCount">0</span> not existed</div>
+                </div>
+                <button class="ml-button" id="verifyBtn" onclick="verify()">
+                    Run Verification
+                </button>
+            </div>
+
+            <!-- Annotations Section -->
+            <div class="ml-section">
+                <h3>Annotations</h3>
+                <div class="ml-stats">
+                    <span id="annotationsCount">0</span> manual annotations
+                </div>
+                <div class="ml-button-group">
+                    <button class="ml-button primary" id="applyBtn" onclick="applyAnnotations()">
+                        Apply to Training
+                    </button>
+                    <button class="ml-button" id="exportAnnotationsBtn" onclick="exportAnnotations()">
+                        Export
+                    </button>
+                </div>
+            </div>
+
+            <!-- Water Section -->
+            <div class="ml-section water-section">
+                <h3>Water Features</h3>
+                <div class="ml-stats" id="waterStats">
+                    Loading water data...
+                </div>
+                <div class="water-legend">
+                    <span class="legend-item"><span class="legend-color" style="background:#0077be"></span> Current (OSM)</span>
+                    <span class="legend-item"><span class="legend-color" style="background:#d97706"></span> Historical (filled)</span>
+                </div>
+                <div class="ml-button-group">
+                    <button class="ml-button" id="waterEditBtn" onclick="toggleWaterEditMode()">
+                        ✎ Water Edit Mode
+                    </button>
+                    <button class="ml-button primary" onclick="startDrawWater()">
+                        + Draw Water Area
+                    </button>
+                </div>
+                <p class="section-hint">Click OSM water to trace filled areas. Click historical to edit.</p>
+            </div>
+
+            <!-- Georeferencing Section -->
+            <div class="ml-section georef-section">
+                <h3>Georeferencing</h3>
+                <div class="georef-controls" id="georefControls">
+                    <!-- Image Selection -->
+                    <div class="georef-select-group">
+                        <label>Select Image:</label>
+                        <select id="georefImageSelect" onchange="onGeorefImageSelect()">
+                            <option value="">-- Choose image --</option>
+                        </select>
+                        <button class="ml-button-small" onclick="refreshGeorefImages()" title="Refresh list">↻</button>
+                    </div>
+                    <!-- Upload -->
+                    <div class="georef-upload">
+                        <input type="file" id="georefFileInput" accept=".jpg,.jpeg,.png,.tif,.tiff" style="display:none" onchange="onGeorefFileSelect(event)">
+                        <button class="ml-button" onclick="document.getElementById('georefFileInput').click()">
+                            Upload Image
+                        </button>
+                    </div>
+                </div>
+                <!-- GCP Mode Button -->
+                <button class="ml-button primary" id="georefModeBtn" onclick="toggleGeorefMode()" disabled>
+                    Enter GCP Mode
+                </button>
+                <p class="section-hint">Select an image, then enter GCP mode to place control points.</p>
+            </div>
+
+            <!-- GCP Panel (shown in georef mode) -->
+            <div class="ml-section gcp-panel" id="gcpPanel" style="display: none;">
+                <h3>Ground Control Points</h3>
+                <div class="gcp-instructions">
+                    <p><strong>Step 1:</strong> Click on the <span class="highlight-image">image</span> to set pixel position</p>
+                    <p><strong>Step 2:</strong> Click on the <span class="highlight-map">map</span> to set geographic position</p>
+                </div>
+                <div class="gcp-list" id="gcpList">
+                    <!-- GCP items will be added here -->
+                    <div class="gcp-empty">No GCPs yet. Click image to add.</div>
+                </div>
+                <div class="gcp-stats">
+                    <span id="gcpCount">0</span> GCPs (<span id="gcpComplete">0</span> complete)
+                </div>
+                <div class="ml-button-group">
+                    <button class="ml-button" onclick="saveGcps()">Save GCPs</button>
+                    <button class="ml-button primary" onclick="runGeoreferencing()" id="runGeorefBtn" disabled>
+                        Run Georef
+                    </button>
+                </div>
+                <button class="ml-button" onclick="exitGeorefMode()">Exit GCP Mode</button>
+            </div>
+
+            <!-- Job Status -->
+            <div class="ml-section job-status" id="jobStatus" style="display: none;">
+                <h3>Job Status</h3>
+                <div class="job-progress">
+                    <div class="job-spinner"></div>
+                    <span id="jobStatusText">Running...</span>
+                </div>
+            </div>
+
+            <!-- Log Output -->
+            <div class="ml-section log-section">
+                <div class="log-header" onclick="toggleLogs()">
+                    <h3>Logs</h3>
+                    <span class="log-toggle">▼</span>
+                </div>
+                <div class="log-output collapsed" id="logOutput">
+                    <div class="log-content" id="logContent">No logs yet</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="feature_extraction.js"></script>
+</body>
+</html>

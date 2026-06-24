@@ -152,34 +152,59 @@ When `src` is `ml`, the `ml_src` field identifies which historical map was used:
 ```
 historymap/
 ├── data/
-│   ├── buildings_v2.geojson      # Main building data
-│   ├── buildings_demolished_v2.geojson
-│   ├── roads_temporal.geojson    # Road data with ML-inferred dates
-│   ├── trondheim.pmtiles         # OSM base layers
-│   ├── kartverket/               # Historical map images
-│   └── sefrak/                   # SEFRAK data
+│   ├── sources/                  # Raw and normalized source data
+│   │   ├── sefrak/
+│   │   ├── osm/
+│   │   ├── trondheim_kommune/
+│   │   └── manual/
+│   ├── merged/                   # Merged datasets
+│   │   ├── buildings_merged.geojson
+│   │   └── merge_config.json
+│   ├── export/                   # SERVED BY DOCKER (single source of truth)
+│   │   ├── buildings_temporal.pmtiles
+│   │   ├── trondheim.pmtiles     # Base map (copied from frontend/data/)
+│   │   ├── roads_temporal.geojson
+│   │   ├── manifest.json         # Cache busting hashes
+│   │   └── *.meta.json
+│   └── kartverket/               # Historical map images
 ├── frontend/
 │   ├── index.html
 │   ├── app.js
 │   ├── style.css
-│   └── data/ → ../data/          # Symlinks
+│   └── data/                     # Development fallback (NOT used by Docker)
 ├── ml/
 │   ├── train.py
 │   ├── predict.py
 │   └── models/
 ├── scripts/
-│   ├── normalize_with_evidence.py
-│   ├── compare_buildings.py
-│   └── download_kartverket.py
-├── synthetic/
-│   ├── render_tiles.py
-│   └── styles/
+│   ├── ingest/                   # Stage 1: Data ingestion
+│   ├── normalize/                # Stage 2: Schema normalization
+│   ├── merge/                    # Stage 3: Source merging
+│   ├── export/                   # Stage 4: Frontend export
+│   └── pipeline.py               # Full pipeline orchestration
+├── rebuild.sh                    # Pipeline rebuild script
 └── docs/
     ├── need/
     ├── spec/
     ├── tech/
     └── todo/
 ```
+
+### Docker Serving
+
+Docker serves from `data/export/`, NOT `frontend/data/`:
+
+```yaml
+# docker-compose.yml
+volumes:
+  - ./data/export:/usr/share/nginx/html/data:ro
+```
+
+The `rebuild.sh` script:
+1. Runs the pipeline to generate exports
+2. Copies base tiles (`trondheim.pmtiles`) to `data/export/`
+3. Generates `manifest.json` for cache busting
+4. Uses `--force-recreate` to ensure Docker picks up new files
 
 ## Key Algorithms
 

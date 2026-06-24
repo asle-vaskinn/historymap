@@ -3,12 +3,13 @@ FROM python:3.11-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies (including OpenGL for OpenCV)
+# Install system dependencies (including OpenGL for OpenCV and GDAL for georeferencing)
 RUN apt-get update && apt-get install -y \
     build-essential \
     git \
     libgl1 \
     libglib2.0-0 \
+    gdal-bin \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching

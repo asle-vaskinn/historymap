@@ -18,7 +18,7 @@ from typing import List, Optional
 
 def run_stage(stage: str, sources: Optional[List[str]] = None,
               data_dir: Optional[Path] = None, pmtiles: bool = True,
-              feature_type: str = 'buildings') -> bool:
+              feature_type: str = 'buildings', fail_fast: bool = True) -> bool:
     """
     Run a pipeline stage.
 
@@ -28,21 +28,25 @@ def run_stage(stage: str, sources: Optional[List[str]] = None,
         data_dir: Base data directory
         pmtiles: Generate PMTiles during export (default: True)
         feature_type: 'buildings', 'roads', or 'all'
+        fail_fast: Stop on first error (default: True)
 
     Returns:
         True if successful
     """
     data_dir = data_dir or Path(__file__).parent.parent / 'data'
 
-    # Handle 'all' feature types by running both
+    # Handle 'all' feature types by running all three
     if feature_type == 'all':
         success = True
-        for ft in ['buildings', 'roads']:
+        for ft in ['buildings', 'roads', 'water']:
             print(f"\n{'#'*60}")
             print(f"FEATURE TYPE: {ft.upper()}")
             print('#'*60)
-            if not run_stage(stage, sources, data_dir, pmtiles, ft):
+            if not run_stage(stage, sources, data_dir, pmtiles, ft, fail_fast):
                 success = False
+                if fail_fast:
+                    print(f"\n[FAIL-FAST] Stopping due to failure in {ft}")
+                    return False
         return success
 
     if stage == 'ingest':
@@ -59,10 +63,12 @@ def run_stage(stage: str, sources: Optional[List[str]] = None,
             print(f"\n{'='*60}")
             print(f"STAGE: {s.upper()}")
             print('='*60)
-            if not run_stage(s, sources, data_dir, pmtiles=pmtiles, feature_type=feature_type):
-                print(f"Stage {s} failed!")
+            if not run_stage(s, sources, data_dir, pmtiles=pmtiles, feature_type=feature_type, fail_fast=fail_fast):
+                print(f"\n[ERROR] Stage {s} failed!")
                 success = False
-                # Continue anyway for now
+                if fail_fast:
+                    print(f"[FAIL-FAST] Stopping pipeline. Use --continue-on-error to run all stages.")
+                    return False
         return success
     else:
         print(f"Unknown stage: {stage}")
@@ -98,6 +104,7 @@ def run_ingest(sources: Optional[List[str]], data_dir: Path, feature_type: str =
 
     # Define sources for each feature type
     ROAD_SOURCES = ['nvdb', 'osm_roads', 'kulturminner']
+    WATER_SOURCES = ['osm', 'manual']
     BUILDING_SOURCES = ['osm', 'sefrak']
 
     # Get list of sources to process
@@ -110,6 +117,8 @@ def run_ingest(sources: Optional[List[str]], data_dir: Path, feature_type: str =
         # Default sources based on feature type
         if feature_type == 'roads':
             source_ids = ROAD_SOURCES
+        elif feature_type == 'water':
+            source_ids = WATER_SOURCES
         else:
             source_ids = list(all_sources.keys())
 
@@ -143,6 +152,7 @@ def run_normalize(sources: Optional[List[str]], data_dir: Path, feature_type: st
 
     # Define sources for each feature type
     ROAD_SOURCES = ['nvdb', 'osm_roads', 'kulturminner']
+    WATER_SOURCES = ['osm', 'manual']
 
     sources_dir = data_dir / 'sources'
     all_sources = discover_sources(sources_dir)
@@ -152,6 +162,8 @@ def run_normalize(sources: Optional[List[str]], data_dir: Path, feature_type: st
     else:
         if feature_type == 'roads':
             source_ids = ROAD_SOURCES
+        elif feature_type == 'water':
+            source_ids = WATER_SOURCES
         else:
             source_ids = list(all_sources.keys())
 
@@ -205,6 +217,14 @@ def run_merge(data_dir: Path, feature_type: str = 'buildings') -> bool:
             # Create will be done by merge_roads.py
         from merge.merge_roads import merge_roads
         return merge_roads(config_path)
+    elif feature_type == 'water':
+        config_path = data_dir / 'merged' / 'water_merge_config.json'
+        if not config_path.exists():
+            print(f"  Water merge config not found: {config_path}")
+            print(f"  Creating default config...")
+            # Create will be done by merge_water.py
+        from merge.merge_water import merge_water
+        return merge_water(config_path)
     else:
         config_path = data_dir / 'merged' / 'merge_config.json'
         if not config_path.exists():
@@ -221,7 +241,7 @@ def run_export(data_dir: Path, pmtiles: bool = True, feature_type: str = 'buildi
     Args:
         data_dir: Base data directory
         pmtiles: Generate PMTiles in addition to GeoJSON (default: True)
-        feature_type: 'buildings' or 'roads'
+        feature_type: 'buildings', 'roads', or 'water'
 
     Returns:
         True if successful
@@ -230,6 +250,8 @@ def run_export(data_dir: Path, pmtiles: bool = True, feature_type: str = 'buildi
 
     if feature_type == 'roads':
         return run_export_roads(data_dir, pmtiles)
+    elif feature_type == 'water':
+        return run_export_water(data_dir, pmtiles)
     else:
         return run_export_buildings(data_dir, pmtiles)
 
@@ -241,10 +263,10 @@ def run_export_roads(data_dir: Path, pmtiles: bool = True) -> bool:
         print(f"  Merged road data not found: {merged_path}")
         return False
 
-    # Export to frontend-ready GeoJSON
-    frontend_data = data_dir.parent / 'frontend' / 'data'
-    frontend_data.mkdir(parents=True, exist_ok=True)
-    output_path = frontend_data / 'roads_temporal.geojson'
+    # Export to data/export/ (rebuild.sh copies to frontend/data/)
+    export_dir = data_dir / 'export'
+    export_dir.mkdir(parents=True, exist_ok=True)
+    output_path = export_dir / 'roads.geojson'
 
     from export.export_roads import export_roads, generate_pmtiles
 
@@ -255,10 +277,40 @@ def run_export_roads(data_dir: Path, pmtiles: bool = True) -> bool:
 
     # Optionally convert to PMTiles
     if pmtiles:
-        pmtiles_path = frontend_data / 'roads.pmtiles'
+        pmtiles_path = export_dir / 'roads.pmtiles'
         print(f"\nExporting roads PMTiles...")
         if not generate_pmtiles(output_path, pmtiles_path):
             print("  Roads PMTiles generation failed (tippecanoe may not be installed)")
+            # Don't fail, GeoJSON is enough
+
+    return True
+
+
+def run_export_water(data_dir: Path, pmtiles: bool = True) -> bool:
+    """Export water data."""
+    merged_path = data_dir / 'merged' / 'water_merged.geojson'
+    if not merged_path.exists():
+        print(f"  Merged water data not found: {merged_path}")
+        return False
+
+    # Export to data/export/ (rebuild.sh copies to frontend/data/)
+    export_dir = data_dir / 'export'
+    export_dir.mkdir(parents=True, exist_ok=True)
+    output_path = export_dir / 'water.geojson'
+
+    from export.export_water import export_water, generate_pmtiles
+
+    print(f"\nExporting water GeoJSON...")
+    if not export_water(merged_path, output_path):
+        print("  Water export failed!")
+        return False
+
+    # Optionally convert to PMTiles
+    if pmtiles:
+        pmtiles_path = export_dir / 'water.pmtiles'
+        print(f"\nExporting water PMTiles...")
+        if not generate_pmtiles(output_path, pmtiles_path):
+            print("  Water PMTiles generation failed (tippecanoe may not be installed)")
             # Don't fail, GeoJSON is enough
 
     return True
@@ -290,9 +342,9 @@ def run_export_buildings(data_dir: Path, pmtiles: bool = True) -> bool:
     sources_dir = data_dir / 'sources'
     ml_sources = discover_ml_sources(sources_dir)
     if ml_sources:
-        frontend_data = data_dir.parent / 'frontend' / 'data'
-        frontend_data.mkdir(parents=True, exist_ok=True)
-        manifest_path = frontend_data / 'sources_manifest.json'
+        export_dir = data_dir / 'export'
+        export_dir.mkdir(parents=True, exist_ok=True)
+        manifest_path = export_dir / 'sources_manifest.json'
         export_manifest(ml_sources, manifest_path)
     else:
         print("  No ML sources found, skipping manifest")
@@ -313,7 +365,7 @@ def run_export_buildings(data_dir: Path, pmtiles: bool = True) -> bool:
             print("="*60)
             return True
 
-        pmtiles_path = export_dir / 'buildings.pmtiles'
+        pmtiles_path = export_dir / 'buildings_temporal.pmtiles'
         print(f"\nExporting PMTiles...")
         if not export_pmtiles(
             input_path=geojson_path,
@@ -401,10 +453,12 @@ Road pipeline example:
                         default=Path(__file__).parent.parent / 'data',
                         help='Base data directory')
     parser.add_argument('--feature-type', '-f', type=str, default='buildings',
-                        choices=['buildings', 'roads', 'all'],
-                        help='Feature type to process: buildings, roads, or all')
+                        choices=['buildings', 'roads', 'water', 'all'],
+                        help='Feature type to process: buildings, roads, water, or all')
     parser.add_argument('--no-pmtiles', action='store_true',
                         help='Skip PMTiles generation during export')
+    parser.add_argument('--continue-on-error', action='store_true',
+                        help='Continue running even if a stage fails (default: stop on first error)')
     parser.add_argument('--list', '-l', action='store_true',
                         help='List available sources and exit')
 
@@ -416,7 +470,8 @@ Road pipeline example:
 
     success = run_stage(args.stage, args.sources, args.data_dir,
                         pmtiles=not args.no_pmtiles,
-                        feature_type=args.feature_type)
+                        feature_type=args.feature_type,
+                        fail_fast=not args.continue_on_error)
     sys.exit(0 if success else 1)
 
 

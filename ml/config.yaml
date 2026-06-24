@@ -144,11 +144,13 @@ vectorize:
   classes_to_export:
     - building
     - road
+    - water
 
   # Output directory structure per class
   output_dirs:
     building: buildings/    # Polygons
     road: roads/           # LineStrings (skeletonized)
+    water: water/          # Polygons
 
   # Minimum area/length to keep (removes noise)
   min_area_m2: 10         # For buildings

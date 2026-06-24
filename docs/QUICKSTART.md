@@ -22,14 +22,19 @@ python3 -m http.server 8080
 
 Open http://localhost:8080 in your browser.
 
-### Option 2: Docker
+### Option 2: Docker (Recommended for Development)
 
 ```bash
 # From project root
-docker-compose up
+docker compose up -d
 ```
 
 Open http://localhost:8080 in your browser.
+
+**Important Docker notes:**
+- Docker serves files from `data/export/`, not `frontend/data/`
+- After running the pipeline, use `./rebuild.sh` to update served files
+- The script uses `--force-recreate` to ensure volume mounts are refreshed
 
 ### Option 3: Direct File Access
 
@@ -44,17 +49,16 @@ Open `frontend/index.html` directly in your browser. Note: Some browsers restric
 
 ## Data Files
 
-The frontend loads these files from `data/`:
+The frontend loads PMTiles from `data/export/` (served by Docker):
 
 ### Current Production Files
 
-| File | Size | Description | Status |
-|------|------|-------------|--------|
-| `buildings_v2.geojson` | 15MB | Main building dataset | ✅ Most recent |
-| `buildings_demolished_v2.geojson` | 135KB | Demolished buildings | ✅ Most recent |
-| `buildings_temporal.pmtiles` | 7.3MB | PMTiles format (unused) | ⚠️ Not integrated |
-
-**Note**: The frontend currently loads GeoJSON files, not PMTiles. This is acceptable for development but should be migrated to PMTiles for production.
+| File | Size | Description |
+|------|------|-------------|
+| `buildings_temporal.pmtiles` | ~12MB | Main building dataset with temporal attributes |
+| `trondheim.pmtiles` | ~25MB | Base map (OSM roads, water, landuse) |
+| `water.pmtiles` | ~5KB | Historical water features |
+| `manifest.json` | ~1KB | File hashes for cache busting |
 
 ### Where Data Files Come From
 
@@ -63,10 +67,34 @@ Data Pipeline Stages:
 1. Ingest    → data/sources/{source}/raw/
 2. Normalize → data/sources/{source}/normalized/
 3. Merge     → data/merged/buildings_merged.geojson
-4. Export    → data/export/buildings.geojson (NOT YET IMPLEMENTED)
+4. Export    → data/export/ (PMTiles + manifest.json)
 ```
 
-**Current situation**: The files in `data/` root are manually created from earlier pipeline runs. The full automated pipeline is not yet complete.
+### Cache Busting
+
+The pipeline generates `manifest.json` with file hashes. The frontend uses these to create versioned URLs:
+
+```
+data/buildings_temporal.pmtiles?v=9f1b81b0d36d
+```
+
+This ensures browsers fetch fresh files when content changes, while allowing aggressive caching (30 days).
+
+### Rebuilding Data
+
+```bash
+# Full pipeline rebuild
+./rebuild.sh
+
+# Export stage only (faster, if sources unchanged)
+./rebuild.sh --stage export
+```
+
+The script automatically:
+1. Generates PMTiles from merged data
+2. Copies base tiles to `data/export/`
+3. Creates `manifest.json`
+4. Recreates Docker container to pick up new files
 
 ## Running the Data Pipeline
 

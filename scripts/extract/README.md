@@ -1,6 +1,115 @@
-# Extract Scripts
+# Extraction Pipeline
 
-Scripts for extracting vector features from raster data sources.
+Scripts for extracting data from external sources (APIs, ML inference).
+
+## Overview
+
+The extraction pipeline retrieves data before the combining pipeline processes it:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  EXTRACTION PIPELINE                                            │
+│  ═══════════════════                                            │
+│                                                                 │
+│  ┌──────────────┐                                               │
+│  │ OSMExtractor │── Overpass API ──┐                            │
+│  └──────────────┘                  │                            │
+│                                    ▼                            │
+│  ┌──────────────┐              data/sources/{source}/raw/       │
+│  │NVDBExtractor │── NVDB API ──────┤                            │
+│  └──────────────┘                  │                            │
+│                                    ▼                            │
+│  ┌──────────────┐              ┌────────────────────────────┐   │
+│  │ MLExtractor  │── Inference ─│  COMBINING PIPELINE        │   │
+│  └──────────────┘              │  Ingest → Normalize →      │   │
+│                                │  Merge → Export            │   │
+│                                └────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Quick Start
+
+```python
+from extract import run_extraction
+
+# Extract all sources
+results = run_extraction()
+
+# Extract specific sources
+results = run_extraction(sources=['osm'])
+
+# Extract specific feature types
+results = run_extraction(feature_types=['roads', 'water'])
+```
+
+## CLI Usage
+
+```bash
+# Run all extractors
+python scripts/extract/orchestrate.py
+
+# Run specific sources
+python scripts/extract/orchestrate.py --sources osm nvdb
+
+# Run specific feature types
+python scripts/extract/orchestrate.py --feature-types buildings roads
+
+# Force re-extraction
+python scripts/extract/orchestrate.py --force
+
+# Save report
+python scripts/extract/orchestrate.py --save-report
+```
+
+## Available Extractors
+
+| Extractor | Source | Feature Types | API |
+|-----------|--------|---------------|-----|
+| `OSMExtractor` | osm | buildings, roads, water | Overpass API |
+| `NVDBExtractor` | nvdb | roads | NVDB API v3 |
+| `MLExtractor` | ml_* | buildings, roads | Local inference |
+
+## Creating a New Extractor
+
+```python
+from extract.base import BaseExtractor
+
+class MyExtractor(BaseExtractor):
+    def __init__(self, **kwargs):
+        super().__init__(
+            source_id='my_source',
+            feature_type='buildings',
+            **kwargs
+        )
+
+    def extract(self) -> Dict[str, Any]:
+        # Fetch data from external source
+        features = self._fetch_from_api()
+
+        # Save to raw directory
+        output_path = self.raw_dir / 'buildings.geojson'
+        with open(output_path, 'w') as f:
+            json.dump(geojson, f)
+
+        return {
+            'success': True,
+            'count': len(features),
+            'files': ['buildings.geojson']
+        }
+```
+
+## Files
+
+| File | Description |
+|------|-------------|
+| `__init__.py` | Package exports |
+| `base.py` | `BaseExtractor` abstract base class |
+| `extract_osm.py` | `OSMExtractor` - OpenStreetMap via Overpass |
+| `extract_nvdb.py` | `NVDBExtractor` - Norwegian Road Database |
+| `extract_roads.py` | ML road vectorization from predictions |
+| `orchestrate.py` | Extraction orchestrator |
+
+---
 
 ## extract_roads.py
 
