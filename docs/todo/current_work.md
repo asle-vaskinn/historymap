@@ -56,21 +56,30 @@ now the explicit product gap, not something fallbacks paper over.**
 
 ## Next steps (the year-by-year plan)
 
-Per [`../spec/feat_year_by_year/PROPOSAL.md`](../spec/feat_year_by_year/PROPOSAL.md) +
-[`../spec/feat_temporal_pipeline/SPEC.md`](../spec/feat_temporal_pipeline/SPEC.md) —
-registries give construction dates (fix-points), historical maps give existence
-windows and demolitions, processed newest → oldest:
+Per [`../spec/feat_temporal_pipeline/SPEC.md`](../spec/feat_temporal_pipeline/SPEC.md) +
+[`../spec/feat_year_by_year/PROPOSAL.md`](../spec/feat_year_by_year/PROPOSAL.md).
 
-1. **Matrikkelen ingestion** (biggest lever: ~2 % → ~80 %+ dated buildings).
-   Geonorge bulk download → `scripts/ingest/` + `scripts/normalize/` modules →
-   hybrid join (bygningsnummer → point-in-polygon → nearest) → enable in
-   `merge_config.json` → re-export. Access application status:
-   `docs/matrikkelen_application.md` (gitignored).
-2. **Backward map pass** (SPEC.md §5b–5c): match OSM anchors against extracted map
-   features newest → oldest for `map_window` intervals and demolished-building
-   discovery. Also populate `sd_method`/`sd_src` in the export (currently dropped).
-3. **UX:** animated playback + URL year state (`?year=1965`) once dates are real.
-4. **CI/CD remaining user-only steps:** GitHub secrets, Environments, DNS, provision —
+**2026-07-04 finding:** Matrikkelen does **not** contain byggeår at all (Kartverket:
+[byggeår-siden](https://www.kartverket.no/en/property/mine-eiendommer/bygning-og-bruksenheter/byggear-for-bygninger-og-bruksenheter));
+brukstillatelse/ferdigattest dates exist only from 2009. The registry lever therefore
+shrinks, and **the backward map/aerial pass is the primary dating engine** — which is
+exactly what SPEC.md was designed for:
+
+1. **Backward map pass on existing extracted sources** (SPEC.md §5b–5c): kv1880,
+   kv1904 and air1947 are already georeferenced + ML-extracted
+   (`data/sources/ml_detected/`). Match OSM anchors newest → oldest for `map_window`
+   intervals and demolished-building discovery. Also populate `sd_method`/`sd_src`
+   in the export (currently dropped by the export stage).
+2. **Registry supplements (quick wins):** Byantikvaren kulturminnekart — ~5,000
+   Trondheim buildings *with byggeår* (classes A/B/C; a `byantikvaren` ingest module
+   already exists — check whether it captures byggeår); post-2009 matrikkel
+   brukstillatelse/ferdigattest for new construction and bygningsstatus "revet" for `ed`.
+3. **Densify the timeline:** georeference more Kartverket sheets and the Norge i
+   bilder aerial epochs (Trondheim has many: 1947, 1950s, 60s, 70s, 80s, 90s …) —
+   every added epoch tightens the `sd`/`ed` windows by roughly a decade. Aerials are
+   processed after maps per SPEC.md §5d (harder extraction, refinement only).
+4. **UX:** animated playback + URL year state (`?year=1965`) once dates move.
+5. **CI/CD remaining user-only steps:** GitHub secrets, Environments, DNS, provision —
    see [`../tech/DEPLOYMENT.md`](../tech/DEPLOYMENT.md) §First-time setup.
 
 ---

@@ -64,11 +64,18 @@ multiplied by getting this right first. (B is demoted — see Decision 6; C and 
 | C. **OSM `start_date` only** | Tiny (34 today) | High where present | Already wired; community-dependent |
 | D. **Keep relying on ML / inheritance** | Status quo | Low | None |
 
-✅ **Recommended: A — Matrikkelen.** It is the authoritative source of construction year
-for nearly every building in Norway and maps cleanly onto `sd` as high evidence. It is
-already a (disabled) entry in `merge_config.json`. FKB (B) is a strong secondary later, but
-its primary value is geometry, which OSM already provides. Expected impact: **8.6% → ~80–90%
-genuinely dated.**
+✅ ~~**Recommended: A — Matrikkelen.**~~ **INVALIDATED 2026-07-04:** Kartverket confirms
+byggeår is *not registered in Matrikkelen at all* — for any building, open or restricted
+access ([kartverket.no/…/byggear-for-bygninger-og-bruksenheter](https://www.kartverket.no/en/property/mine-eiendommer/bygning-og-bruksenheter/byggear-for-bygninger-og-bruksenheter)).
+The nearest proxies (midlertidig brukstillatelse / ferdigattest dates) exist only from
+2009 onward — useful for dating *new* construction and for `ed` via bygningsstatus
+"revet", but not for historical coverage.
+
+**Revised recommendation:** the backward map/aerial pass
+(`feat_temporal_pipeline/SPEC.md` §5b–5d) becomes the *primary* dating engine, with
+registry supplements: Byantikvaren kulturminnekart (~5,000 Trondheim buildings with
+byggeår), SEFRAK (already ingested), OSM `start_date`, and post-2009 matrikkel status
+dates. Expected coverage comes from map/aerial windows (`ev=m`), not registry `ev=h`.
 
 ---
 
