@@ -8,11 +8,11 @@ all: build deploy
 
 # Full build pipeline
 build:
-	@./build.sh
+	@./rebuild.sh
 
 # Quick build (skip PMTiles)
 build-quick:
-	@./build.sh --quick
+	@./rebuild.sh --no-pmtiles
 
 # Install Python dependencies
 install:
