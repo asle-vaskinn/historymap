@@ -66,7 +66,7 @@ test-frontend:
 # Python syntax validation
 test-python:
 	@echo "Checking Python syntax..."
-	@python3 -m py_compile scripts/extract/extract_roads.py
+	@python3 -m py_compile scripts/pipeline.py
 	@python3 -m py_compile scripts/merge/match_roads.py
 	@python3 -m py_compile scripts/merge/infer_road_dates.py
 	@python3 -m py_compile scripts/merge/merge_roads.py

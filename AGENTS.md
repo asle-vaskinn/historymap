@@ -91,7 +91,7 @@ edits only need `docker compose restart`, never an image rebuild. Rebuild the im
 | `frontend/legacy/` | Superseded tools (dataprep, old georef/GCP/water editors) | **No** — read-only reference |
 | `backend/` | FastAPI app (`app.py`, ~1400 lines) + async job queue (`jobs.py`) | Yes |
 | `scripts/` | ~70 scripts; pipeline core + many one-offs (see §6 for which are load-bearing) | Core: carefully. One-offs: rarely needed |
-| `scripts/{ingest,normalize,merge,export,georef,db,ml,api,extract,generate,match}/` | Pipeline stage modules | Yes |
+| `scripts/{ingest,normalize,merge,export,ml,api}/` | Pipeline stage modules | Yes |
 | `ml/` | PyTorch U-Net training/inference/vectorization | Yes |
 | `data/` | All data (5+ GB). `sources/` (per-source raw+normalized), `merged/`, `export/`, `georeference/`, `training_*/`, `annotations/` | **Never** hand-edit generated files; manage via pipeline |
 | `models/checkpoints/` | Trained weights (`best_model.pth`, 172 MB) | No |
