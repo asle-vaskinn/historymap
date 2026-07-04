@@ -1,70 +1,77 @@
 # Current Work
 
-**Status:** Frontend tool consolidation (uncommitted) + picking the project back up
-**Last updated:** 2026-06-20
+**Status:** Repo cleanup + spec alignment landed; next up is real dating coverage
+**Last updated:** 2026-07-04
 
 > Read this first on any new task. For the full codebase map see [`AGENTS.md`](../../AGENTS.md);
 > for known loose ends see [`../tech/IMPLEMENTATION_STATUS.md`](../tech/IMPLEMENTATION_STATUS.md).
 
 ---
 
-## ▶ Active proposal: CI/CD + VPS consolidation (2026-06-20)
+## ▶ 2026-07-04: Cleanup + temporal-spec alignment (committed on `feature/year-by-year-improvements`)
 
-Approved direction — set up GitHub Actions CI/deploy by reusing the
-`subscribe`/`nextbrain` harness and move the live site onto the shared Hetzner VPS
-(`62.238.25.113`) as tenant #3, retiring the dedicated box `77.42.33.192`.
+One commit per change so any step can be reverted individually (`git log --oneline`):
 
-- **Spec:** [`../spec/feat_cicd/SPEC.md`](../spec/feat_cicd/SPEC.md) (AC1–AC10)
-- **Plan:** [`../superpowers/plans/2026-06-20-cicd-vps-consolidation.md`](../superpowers/plans/2026-06-20-cicd-vps-consolidation.md)
-- **Runbook:** [`../tech/DEPLOYMENT.md`](../tech/DEPLOYMENT.md)
-- **Status:** ✅ **Harness implemented & committed** (`1051807`): CI (`test.yml`),
-  `deploy-prod`/`deploy-stage`/`provision-vps` workflows, `deploy_vps.sh`/
-  `setup_vps.sh`/`sync_data.sh`, prod+stage nginx vhosts, `rollback.sh`,
-  `/version` contract. All syntax-validated; version test green.
-- **Remaining (user-only, can't be automated from here):** add GitHub secrets
-  (`VPS_SSH_KEY`/`VPS_HOST`/`VPS_USER`/`GH_TOKEN`/`LETSENCRYPT_EMAIL`), create
-  `production`+`staging` Environments, point DNS at the VPS, run *Provision VPS*,
-  `sync_data.sh`, verify, then retire `77.42.33.192`. See DEPLOYMENT.md §First-time setup.
-- **Bug — 403 roads_temporal.geojson:** durable fix shipped (`sync_data.sh`
-  `--chmod`). Live hotfix needs SSH: `chmod 644` the file on the box (DEPLOYMENT.md §Hotfix).
-- **Bug — building-year save "Load failed":** the `:5001` manual-edit server was
-  not running; start it with `.venv/bin/python scripts/api/server.py`.
+1. **Dead code removed (~32k lines):** `production/` (pre-CI/CD deploy path), the unwired
+   `scripts/extract|db|generate` packages + `config_schema.py`/`pipeline_state.py`, ~25
+   superseded one-off scripts, the phase-4 annotation toolkit, the dead editor servers
+   (`water_editor.py` :5002, `georef_server.py` :8082, `gcp_editor.py`) and `frontend/legacy/`.
+   All recoverable from git history.
+2. **Single backend:** the Flask :5001 manual-edit API was folded into the FastAPI backend
+   (`GET/POST /api/manual`, `POST /api/rebuild`); `app.js` now calls them through nginx
+   — the "building-year save Load failed" bug class is gone. Only port 8080 is exposed.
+3. **No fallback years (spec alignment):** the 1960/2000 frontend fallbacks were removed per
+   [`../spec/feat_temporal_pipeline/SPEC.md`](../spec/feat_temporal_pipeline/SPEC.md).
+   Undated and low-evidence (`ev='l'`) features render **muted** and follow the new
+   **Estimated** toggle in the viewer (feat_year_by_year Decision 5C).
+4. **Self-contained export:** `data/export/` now contains everything the frontend needs
+   (`roads_temporal.geojson` — the pipeline previously wrote it under a name nothing used —
+   `sources_manifest.json`, `manifest.json`); root `data/` live files are symlinks into it,
+   so `sync_data.sh` ships a complete site. Legacy root artifacts moved to
+   `data/archive/legacy_root/` (see its README).
+5. **Docs reconciled:** SPEC.md carries a "current intent" banner; the fallback-era docs
+   (PIPELINE_DESIGN, PRODUCT_SPEC, DATA_PIPELINE_ARCHITECTURE, methodology, DATA_SCHEMA)
+   are marked legacy-record; stale QUICKSTART/user_guide archived; backend/frontend READMEs
+   rewritten.
+6. **Verified:** pytest 39/39, `test_frontend.js` 24/24, `test_pipeline_e2e.py` green
+   (it had been failing — see below), docker smoke on all endpoints + PMTiles range requests.
+
+### ⚠ Honest-data reality discovered during verification
+
+A full `rebuild.sh` had not been run since January. Running it revealed the old
+"100 % dated" exports were only achievable via fallbacks baked into data:
+
+- **Buildings:** the current pipeline produces ~2.3 % genuinely dated buildings
+  (SEFRAK matches). The old export's 60,994 `ev='l'` buildings carried an inherited
+  sd=1960. The 1960-inheritance path no longer exists in the pipeline.
+- **Roads:** 47 of 36,730 roads have a real `sd`. The old `roads_temporal.geojson`
+  (10,000 roads, "100 % dated") had the year-2000 fallback baked in — archived as
+  `data/archive/legacy_root/roads_temporal_fallbackbaked.geojson`.
+
+The viewer handles this honestly (undated = muted + toggle; `validate_export.py` now
+reports missing `sd` as a *coverage gap* warning, not an error). **Dating coverage is
+now the explicit product gap, not something fallbacks paper over.**
 
 ---
 
-## Where things stand
+## Next steps (the year-by-year plan)
 
-The most recent committed work (`68f36a0`) added the **source manager** with TPS
-georeferencing and GCP improvements. On top of that there is a batch of **uncommitted
-frontend reorganization** in the working tree — the in-flight task is consolidating the
-georeferencing / ML tooling and clearing out superseded editors.
+Per [`../spec/feat_year_by_year/PROPOSAL.md`](../spec/feat_year_by_year/PROPOSAL.md) +
+[`../spec/feat_temporal_pipeline/SPEC.md`](../spec/feat_temporal_pipeline/SPEC.md) —
+registries give construction dates (fix-points), historical maps give existence
+windows and demolitions, processed newest → oldest:
 
-### Uncommitted changes (working tree)
-
-| Change | Meaning |
-|--------|---------|
-| `source_viewer.{html,js,css}` → `feature_extraction.{html,js,css}` | Renamed the ML / annotation tool to its current name |
-| `dataprep.{html,js,css}` → `frontend/legacy/` | Old data-prep tool retired to read-only legacy |
-| New `frontend/legacy/{gcp_editor,georef_editor,source_manager_old,water_editor}.html` | Superseded standalone editors archived |
-| `frontend/source_manager.html` modified | Current georeferencing tool (TPS + GCP work) |
-| `backend/app.py`, `nginx.conf`, `scripts/georef_server.py` modified | Backend/routing adjustments accompanying the above |
-| New `docs/tech/TILE_*.md`, `docs/tech/georef_transform_analysis.md`, `scripts/generate_raster_tiles.sh` | Raster tile generation docs + script |
-
-**Current frontend tools (the live set):**
-- `index.html` + `app.js` — the map viewer (year slider, layer toggles, inspect/edit modes)
-- `source_manager.html` — georeferencing UI (GCP placement, affine preview + TPS warp)
-- `feature_extraction.{html,js,css}` — ML pipeline control + annotation drawing
-- `frontend/legacy/` — **read-only**, do not edit
-
-### Next steps to resume
-
-1. Decide whether the uncommitted frontend reorg is finished; if so, commit it on a branch
-   (per `CLAUDE.md` git workflow — never commit straight to `main`).
-2. Verify the renamed `feature_extraction.*` tool still loads and its API calls work
-   (`node --check frontend/feature_extraction.js`, then exercise via docker).
-3. Confirm `nginx.conf` + `backend/app.py` changes are consistent with the rename.
-4. Reconcile any docs still referencing the old `source_viewer.*` / `dataprep.*` names
-   (e.g. `docs/spec/feat_source_viewer/`).
+1. **Matrikkelen ingestion** (biggest lever: ~2 % → ~80 %+ dated buildings).
+   Geonorge bulk download → `scripts/ingest/` + `scripts/normalize/` modules →
+   hybrid join (bygningsnummer → point-in-polygon → nearest) → enable in
+   `merge_config.json` → re-export. Access application status:
+   `docs/matrikkelen_application.md` (gitignored).
+2. **Backward map pass** (SPEC.md §5b–5c): match OSM anchors against extracted map
+   features newest → oldest for `map_window` intervals and demolished-building
+   discovery. Also populate `sd_method`/`sd_src` in the export (currently dropped).
+3. **UX:** animated playback + URL year state (`?year=1965`) once dates are real.
+4. **CI/CD remaining user-only steps:** GitHub secrets, Environments, DNS, provision —
+   see [`../tech/DEPLOYMENT.md`](../tech/DEPLOYMENT.md) §First-time setup.
 
 ---
 
@@ -72,38 +79,20 @@ georeferencing / ML tooling and clearing out superseded editors.
 
 **Status: PAUSED** — ML water extraction blocked on low IoU (class imbalance).
 
-Goal: show coastal change 1700–2025, including land-reclamation areas (Brattøra ~1960–1980,
-Nedre Elvehavn ~1970–1990, Ilsvika ~1950–1970).
-
-- **Done:** water integrated into the main pipeline (`--feature-type water`); OSM water
-  fetcher (`scripts/ingest/fetch_osm_water.py`); water editor (`scripts/water_editor.py`,
-  :5002); `merge_water.py` + `export_water.py`; water layer with temporal filtering on the map.
-- **Blocked / TODO:** train a usable water model (`ml/config_water.yaml` — IoU too low),
-  run inference on historical maps, vectorize, then manual correction of key reclamation areas.
-
-Schema reminder — water features: `wtype` (river/fjord/lake/canal/harbor), `sd`, `ed`,
-`ev` (h/m/l), `nm`, `src` (osm/man/ml). Manual edits land in
-`data/sources/manual/water.geojson`; re-run the pipeline to merge + export.
-
-Background: [`../tech/water-pipeline.md`](../tech/water-pipeline.md),
+Goal: coastal change 1700–2025 incl. land reclamation (Brattøra ~1960–1980,
+Nedre Elvehavn ~1970–1990, Ilsvika ~1950–1970). Done: water in main pipeline,
+OSM fetcher, `/api/water/*` endpoints, temporal water layer. TODO: usable water
+model (`ml/config_water.yaml`), inference on historical maps, manual correction
+of reclamation areas. Background: [`../tech/water-pipeline.md`](../tech/water-pipeline.md),
 [`../handover/water_pipeline_handover.md`](../handover/water_pipeline_handover.md).
 
 ---
 
 ## Recently completed (chronological)
 
-- **Source manager + TPS georeferencing** — dual-canvas GCP placement, affine preview +
-  TPS final warp, GCP persistence, large-image auto-resize, source-catalog CRUD.
-- **Georeferencing alignment to OSM** — IoU matching with TPS/TIN/affine, train/test
-  validation (`scripts/align_to_osm.py`), `/api/align` + `/api/alignment-report`.
-- **Water editor tooling** — OSM import via Overpass, MapboxDraw polygon editing,
-  `/api/water/{add,update,delete}`.
-- **Road temporal network** — LSS-Hausdorff road matching, building-based date inference,
-  multi-layer fallback (ML → building inference → year-2000 fallback).
-- **Building replacement detection** — centroid-containment matching, `repl_by`/`repl_of`,
-  `demolished` flag.
-- **PMTiles + cache busting** — full PMTiles serving with `manifest.json` hash versioning;
-  nginx range-request + immutable-cache config.
-- **Timeline UI** — year slider with ◀ ▶ step buttons.
-
-Older per-phase reports are frozen in [`../archive/`](../archive/).
+- **2026-07-04 cleanup + spec alignment** (this page, above).
+- **CI/CD harness** (`test.yml`, deploy workflows, VPS scripts) — implemented; user-side
+  setup steps remain (see DEPLOYMENT.md).
+- **Source manager + TPS georeferencing**, **alignment to OSM**, **road temporal network**,
+  **building replacement detection**, **PMTiles + cache busting**, **timeline UI** —
+  see [`../archive/`](../archive/) for frozen phase reports.

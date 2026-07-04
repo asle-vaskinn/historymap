@@ -704,8 +704,9 @@ function createMapStyle(year) {
                     'fill-opacity': [
                         'case',
                         ['==', ['get', 'ev'], 'h'], 0.85,
-                        // Low evidence (estimated/inherited dates) renders muted
+                        // Undated or low-evidence buildings render muted
                         // so the map doesn't imply false precision
+                        ['!', ['has', 'sd']], 0.35,
                         ['==', ['get', 'ev'], 'l'], 0.35,
                         0.7
                     ]
@@ -737,6 +738,7 @@ function createMapStyle(year) {
                     ],
                     'line-opacity': [
                         'case',
+                        ['!', ['has', 'sd']], 0.4,
                         ['==', ['get', 'ev'], 'l'], 0.4,
                         0.8
                     ]
@@ -949,9 +951,7 @@ function createMlSourceFilter() {
  * @returns {array} MapLibre filter expression
  */
 function createBuildingFilter(year) {
-    // Temporal filter: building existed at the given year.
-    // Every exported building carries sd (spec: no fallback defaults —
-    // a feature without a dated observation is not in the dataset).
+    // Temporal filter for dated buildings: sd <= year AND (no ed OR ed >= year).
     // Note: Using legacy filter syntax (property names as strings)
     const hasDateFilter = [
         'all',
@@ -963,9 +963,13 @@ function createBuildingFilter(year) {
         ]
     ];
 
-    // Optionally hide low-evidence (estimated) buildings entirely
+    // Most OSM buildings have no dated observation yet (Matrikkelen /
+    // backward map pass pending). No fallback year is applied: undated
+    // buildings render muted and follow the 'Estimated' toggle, same as
+    // undated roads. Low-evidence (ev='l') dated buildings are treated
+    // as estimated too.
     const temporalFilter = showEstimated
-        ? hasDateFilter
+        ? ['any', hasDateFilter, ['!has', 'sd']]
         : ['all', hasDateFilter, ['!=', 'ev', 'l']];
 
     // If source filter is disabled (production mode), just apply temporal filter
