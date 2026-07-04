@@ -18,7 +18,7 @@ Based on what changed, determine which tests to run:
 | Python scripts | `python -m py_compile <file>`, unit tests |
 | Data pipeline | `PYTHONPATH=scripts python3 scripts/pipeline.py --stage <stage>` |
 | Docker config | `docker compose config`, `docker compose up` |
-| Full system | `./scripts/validate_phase5.sh` |
+| Full system | `PYTHONPATH=scripts python3 -m pytest tests/ -v` + `./scripts/validate_phase1.sh` |
 
 ### 2. Run Tests in Parallel
 
@@ -63,13 +63,8 @@ Repeat until all tests pass.
 
 Run the full validation suite:
 ```bash
-./scripts/validate_phase5.sh
-```
-
-Or for specific phases:
-```bash
-./scripts/validate_phase1.sh  # Frontend
-./scripts/validate_phase4.sh  # Data processing
+PYTHONPATH=scripts python3 -m pytest tests/ -v
+./scripts/validate_phase1.sh  # artifact existence checks
 ```
 
 ### 6. Report
@@ -107,7 +102,7 @@ docker compose up -d && sleep 2 && curl -s http://localhost:8080/ | head -1
 curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/
 
 # Full validation
-./scripts/validate_phase5.sh
+PYTHONPATH=scripts python3 -m pytest tests/ -v
 ```
 
 ## Browser Testing Checklist

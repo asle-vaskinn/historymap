@@ -146,7 +146,7 @@ PYTHONPATH=scripts python3 scripts/pipeline.py --list           # sources + stag
 PYTHONPATH=scripts python3 -m pytest tests/ -v   # unit tests
 python3 scripts/test_pipeline_e2e.py             # end-to-end pipeline test
 node --check frontend/app.js                     # Validate JS syntax (after every JS edit)
-./scripts/validate_phase1.sh                     # artifact checks (also phase4, phase5)
+./scripts/validate_phase1.sh                     # artifact checks
 
 # ML
 python ml/train.py --config ml/config.yaml

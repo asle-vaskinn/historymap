@@ -74,7 +74,7 @@ PYTHONPATH=scripts python3 -m pytest tests/ -v   # unit tests (constants, Result
 python3 scripts/test_pipeline_e2e.py             # end-to-end pipeline test (inject→run→verify→cleanup)
 node --check frontend/app.js                     # JS syntax — run after EVERY frontend JS edit
 make test                                        # frontend checks + python syntax compile checks
-./scripts/validate_phase1.sh                     # artifact existence checks (also phase4, phase5)
+./scripts/validate_phase1.sh                     # artifact existence checks
 ```
 
 Backend code is volume-mounted into the container (`docker-compose.yml`), so backend/script
