@@ -42,8 +42,6 @@ manual edits, and ML extraction (U-Net) from georeferenced historical Kartverket
 | 8080 | nginx → frontend + everything else | `docker compose up` (host port) |
 | 5000 | FastAPI backend (`backend/app.py`) | Docker only; **not** published to host — reach it via nginx at `localhost:8080/api/` |
 | 5001 | Flask manual-edit API (`scripts/api/server.py`) | Standalone, run manually; frontend edit mode POSTs here directly |
-| 5002 | Water editor (`scripts/water_editor.py`) | Standalone, run manually |
-| 8082 | Legacy georef server (`scripts/georef_server.py`) | Standalone; superseded by FastAPI georef endpoints |
 
 ---
 
@@ -88,7 +86,6 @@ edits only need `docker compose restart`, never an image rebuild. Rebuild the im
 | Path | What it is | Edit freely? |
 |------|-----------|--------------|
 | `frontend/` | Vanilla JS MapLibre app, no build step | Yes — run `node --check` after |
-| `frontend/legacy/` | Superseded tools (dataprep, old georef/GCP/water editors) | **No** — read-only reference |
 | `backend/` | FastAPI app (`app.py`, ~1400 lines) + async job queue (`jobs.py`) | Yes |
 | `scripts/` | ~70 scripts; pipeline core + many one-offs (see §6 for which are load-bearing) | Core: carefully. One-offs: rarely needed |
 | `scripts/{ingest,normalize,merge,export,ml,api}/` | Pipeline stage modules | Yes |
@@ -189,7 +186,8 @@ only in `feature_extraction.html`.
 
 - `scripts/api/server.py` (Flask, :5001): `GET/POST /api/manual` (manual building edits),
   `POST /api/rebuild` (runs normalize→merge→export). Required by index.html edit mode.
-- `scripts/water_editor.py` (:5002) and `scripts/georef_server.py` (:8082): legacy/standalone tools.
+- The former water editor (:5002) and legacy georef server (:8082) were removed 2026-07-04 —
+  their functionality lives in the FastAPI `/api/water/*` and `/api/georef/*` endpoints.
 
 ---
 
@@ -331,9 +329,9 @@ cross-reference related docs.
 5. **One job at a time** in the backend; jobs vanish from the API on restart (disk artifacts remain).
 6. **Frontend fallback years**: undated buildings appear from 1960, undated roads from 2000 —
    intentional, not a bug. Don't "fix" without checking `docs/spec/feat_temporal_pipeline/`.
-7. **`frontend/legacy/` is read-only history**; current tools are `source_manager.html` and
-   `feature_extraction.{html,js,css}` (recently renamed from `source_viewer.*` — some docs still
-   use the old name).
+7. **`frontend/legacy/` was removed 2026-07-04** (recover via git history); current tools are
+   `source_manager.html` and `feature_extraction.{html,js,css}` (renamed from `source_viewer.*` —
+   some docs still use the old name).
 8. **Type A vs Type B sources** in the frontend filter logic (timeline-filtered vs all-or-nothing
    ML snapshots) interact; test both `dateSourceFilter` and `snapshotFilter` paths after touching filters.
 9. **Stale docs exist**: root `PHASE*` files, parts of `IMPLEMENTATION_STATUS.md`, and older specs

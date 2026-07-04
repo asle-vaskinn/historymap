@@ -93,7 +93,7 @@ ML: U-Net (segmentation-models-pytorch) — ml/train.py → predict.py → vecto
 
 Ports: **8080** nginx (only host-published port; backend reached via `/api/`),
 5001 Flask manual-edit API (`scripts/api/server.py`, standalone — needed by index.html edit mode),
-5002 water editor, 8082 legacy georef server. See AGENTS.md §1.
+See AGENTS.md §1.
 
 ## Data Schema
 
@@ -119,7 +119,6 @@ required `_src`, `_src_id`, `_ingested`; optional `sd`, `ed`, `ev`, `bt`, `nm`, 
 | Path | Purpose |
 |------|---------|
 | `frontend/` | MapLibre app: `index.html`+`app.js` (viewer), `source_manager.html` (georef tool), `feature_extraction.*` (ML/annotation tool) |
-| `frontend/legacy/` | Superseded tools — **read-only**, never edit |
 | `backend/` | FastAPI app (`app.py`) + job queue (`jobs.py`) |
 | `ml/` | PyTorch U-Net training/inference/vectorization |
 | `scripts/` | Pipeline core (`pipeline.py`, `constants.py`, `result.py`) + stage modules (`ingest/`, `normalize/`, `merge/`, `export/`) + many one-off tools |
