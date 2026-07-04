@@ -86,6 +86,27 @@ feature with no modern counterpart.
 - `coverage < 0.15` → no match: the anchor is unconstrained by this map — with a newer
   matched observation this becomes `sd ∈ (1936, newer]` (absence is evidence too, where
   extraction quality is trusted).
+
+**Per-source geometry precision.** Each map source declares
+`geometry_precision: generalized | surveyed` (in its manifest/config), which selects the
+interpretation rules:
+
+- `generalized` (drawn city maps 1868–1936): occupancy-only scoring as above; footprint
+  shape differences are mostly drawing/georef noise → any replacement suspicion is a
+  QUEUE item for a human, never auto-classified.
+- `surveyed` (økonomisk kartverk 1979, ortofotos, modern maps): geometry is trustworthy,
+  so use the two directional containments —
+  `cov_old = area(old ∩ anchor)/area(old)` and `cov_anchor = area(old ∩ anchor)/area(anchor)`:
+  - both high → unchanged building → auto-ACCEPT.
+  - `cov_old` high, `cov_anchor` low → old footprint is the *core* of the current one →
+    **expansion**; identity holds, `sd ≤ map_year` stands. (The expansion event itself is
+    a geometry-change our sd/ed model doesn't represent — future work, recorded in the
+    match note.)
+  - `cov_anchor` high, `cov_old` low → building shrank (partial demolition) — same
+    identity logic, noted.
+  - both low despite overlap (offset/rotated/different) → **replacement suspect** → QUEUE;
+    accepting as replacement creates a predecessor feature with `ed`, and the current
+    anchor stays unconstrained by this map.
 - Extracted feature with no OSM match, area ≥ 30 m² → QUEUE as *demolished candidate*;
   below 30 m² → dropped but counted in `report.json` (no silent truncation).
 - OSM building with no extracted match → unconstrained by this map (report counts only).
