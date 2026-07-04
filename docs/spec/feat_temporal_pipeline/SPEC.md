@@ -1,5 +1,15 @@
 # Pipeline Spec: Year-by-Year Temporal Dataset
 
+> **Status (2026-07-04): Current approved intent.** This spec supersedes the
+> fallback-based design described in `docs/spec/PIPELINE_DESIGN.md`,
+> `docs/tech/DATA_PIPELINE_ARCHITECTURE.md`, `docs/tech/DATA_SCHEMA.md`, and
+> `docs/tech/methodology.md`. It is **complementary** to
+> `docs/spec/feat_year_by_year/PROPOSAL.md`: the PROPOSAL supplies the registry
+> fix-points (Matrikkelen/SEFRAK construction dates), this SPEC supplies the
+> backward map-window algorithm. The frontend fallback removal (undated
+> buildings at 1960 / roads at 2000) shipped 2026-07-04; the pipeline backward
+> pass is not yet implemented.
+
 ## Goal
 
 Produce a map of Trondheim for every year 1850–2025 showing buildings, roads,

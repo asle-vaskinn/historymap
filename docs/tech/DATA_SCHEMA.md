@@ -1,5 +1,11 @@
 # Temporal Data Schema
 
+> **Status (2026-07-04):** Describes the fallback-based dating approach that
+> shipped through 2026-06; the approved replacement is
+> `docs/spec/feat_temporal_pipeline/SPEC.md` (no fallback defaults, backward
+> map pass). Kept as an accurate record of current pipeline code until the
+> redesign lands.
+
 This document defines the temporal data schema for both buildings and roads.
 
 ---
@@ -47,6 +53,12 @@ MANUAL (polys)  ─── match osm_ref/spatial ───► ATTACH dates to OSM
 4. **Unmatched = potentially demolished** - Historical buildings not in OSM go to separate file
 
 ### Fallback Rule
+
+> **Update 2026-07-04:** The FRONTEND fallback (rendering undated buildings
+> from 1960) was removed — low-evidence (`ev='l'`) buildings now render muted
+> with an "Estimated" toggle. The data-level 1960 inheritance below still
+> exists in the merge output until the Matrikkelen/backward-pass redesign
+> (`docs/spec/feat_temporal_pipeline/SPEC.md`) lands.
 
 Buildings without any date information are assumed to be modern:
 - **Fallback year: 1960**
@@ -224,7 +236,8 @@ Sources that provide exact construction years are prioritized by reliability:
 3. **OSM start_date** - Community-sourced (exact dates)
 4. **ML detection (older map)** - Establishes upper bound (nlt)
 5. **ML non-detection (older map)** - Establishes lower bound (net)
-6. **Assumed/estimated** - Default fallback
+6. **Assumed/estimated** - Default fallback *(frontend fallback removed
+   2026-07-04; data-level 1960 inheritance still present in merge output)*
 
 ### Conflict Resolution Rules:
 
@@ -675,6 +688,11 @@ Road segments use segment-based tracking (split at intersections).
 | `sd_inherited` | bool | true if date was inherited from buildings |
 
 ### Road Date Inference Priority System
+
+> **Update 2026-07-04:** The FRONTEND fallback (rendering undated roads from
+> 2000) was removed; the data-level fallback dating below still exists in the
+> pipeline output until the redesign in
+> `docs/spec/feat_temporal_pipeline/SPEC.md` lands.
 
 Roads are dated using a priority-based fallback system that combines ML detection evidence with building-based inference.
 
