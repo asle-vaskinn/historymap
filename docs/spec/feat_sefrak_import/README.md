@@ -1,5 +1,12 @@
 # Feature Spec: SEFRAK Data Import
 
+> **Superseded scripts (2026-07-04):** `scripts/merge_sefrak_osm.py` and
+> `scripts/normalize_dates.py` referenced below were deleted — merging now
+> happens in `scripts/merge/merge_sources.py` and date parsing in
+> `scripts/normalize/date_utils.py` / `scripts/normalize/normalize_sefrak.py`.
+> Note: `scripts/download_sefrak.py` and `scripts/convert_sefrak.py` still
+> **exist** (manual SEFRAK ingest) and remain valid.
+
 ## Overview
 
 Import and integrate data from the Norwegian SEFRAK (Sekretariatet for registrering av faste kulturminner i Norge) registry to enrich building data with historical construction dates and cultural heritage information. SEFRAK provides authoritative construction dates for pre-1900 buildings across Norway.

@@ -141,7 +141,7 @@ To help users distinguish snapshot buildings from dated buildings:
 
 Each snapshot source includes navigation links:
 
-- **View Details** → Opens `source_viewer.html?source=<id>` for detailed inspection
+- **View Details** → Opens `feature_extraction.html?source=<id>` for detailed inspection (tool formerly named `source_viewer.html`)
 - **Inspect** → Enters inspection mode overlay on current map
 - **URL params** → `index.html?snapshot=kv1880` enables that snapshot on load
 

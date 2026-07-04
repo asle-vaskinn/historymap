@@ -1,5 +1,11 @@
 # Feature Spec: OSM Baseline Import
 
+> **Superseded scripts (2026-07-04):** `scripts/download_osm.py` /
+> `scripts/ingest/ingest_osm.py` referenced below were deleted. The live path
+> is `scripts/ingest/osm.py` (+ `scripts/ingest/osm_roads.py`) and
+> `scripts/normalize/normalize_osm.py`, run via
+> `PYTHONPATH=scripts python3 scripts/pipeline.py`.
+
 ## Overview
 
 Import OpenStreetMap data as the modern baseline for all features in the Trondheim Historical Map. This provides the "Find" baseline (current state) that other data sources (SEFRAK, ML extraction) will enrich with historical information.
@@ -201,4 +207,4 @@ overpass_url: "https://overpass-api.de/api/interpreter"
 - [ ] Document OSM attribution requirements
 - [ ] Integrate into main pipeline (`scripts/pipeline.py`)
 - [ ] Add validation tests
-- [ ] Update QUICKSTART.md with OSM import instructions
+- [ ] ~~Update QUICKSTART.md with OSM import instructions~~ (QUICKSTART.md archived to `docs/archive/`; setup docs live in root `README.md` / `AGENTS.md`)

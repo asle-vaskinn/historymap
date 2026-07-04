@@ -1,5 +1,12 @@
 # Feature Spec: ML Extraction from Historical Maps
 
+> **Superseded scripts (2026-07-04):** `scripts/verify_buildings.py` and
+> `scripts/compare_buildings.py` referenced below were deleted. The live
+> verification path is `scripts/verify_1937_buildings.py`, and ML inference
+> runs via `ml/predict.py` + `ml/vectorize.py` (driven through the FastAPI
+> backend jobs). Synthetic-data scripts are now `synthetic/render_tiles.py` /
+> `synthetic/create_masks.py`. `scripts/georeference_map.py` still exists.
+
 ## Overview
 
 ML-based feature extraction uses a U-Net deep learning model to perform semantic segmentation on historical map rasters, extracting building footprints, roads, water bodies, and forested areas. The extracted features are vectorized to GeoJSON polygons with confidence scores.

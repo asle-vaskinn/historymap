@@ -1,5 +1,7 @@
 # Quickstart Guide
 
+> **DEPRECATED (2026-07-04):** Archived — see the root `README.md` and `AGENTS.md` for current setup instructions.
+
 Get the Trondheim Historical Map running in 5 minutes.
 
 ## Prerequisites
