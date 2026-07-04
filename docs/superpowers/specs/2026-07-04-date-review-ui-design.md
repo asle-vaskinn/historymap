@@ -68,11 +68,24 @@ criterion).
 
 ## Matcher rules (deterministic, no ML)
 
-- Candidate pairing via spatial index (shapely STRtree); score = footprint IoU,
-  centroid distance as tiebreaker.
-- `IoU ≥ 0.5` AND exactly one candidate → auto-ACCEPT.
-- `0.15 ≤ IoU < 0.5` OR multiple candidates → QUEUE.
-- `IoU < 0.15` → no match.
+**Epistemics:** extracted 1936 polygons are *occupancy evidence*, not geometry —
+"built mass stood approximately here." The OSM footprint stays the permanent anchor;
+identity is assumed by continuity (same building unless evidence otherwise). A match
+contributes only the temporal bound; the extracted polygon is discarded afterwards,
+except for demolished candidates where it becomes the (approximate) geometry of a
+feature with no modern counterpart.
+
+- Candidate pairing via spatial index (shapely STRtree).
+- **Primary score = per-anchor coverage**: fraction of the OSM footprint covered by the
+  union of extracted 1936 built-mass. Drawn maps merge row houses into single block
+  blobs, so one extracted feature may support MANY anchors (many-to-one is expected,
+  not an error). Symmetric IoU is the secondary signal: high coverage + low IoU with a
+  single small blob suggests "same plot, different building" (replacement) → QUEUE.
+- `coverage ≥ 0.5` (and no replacement signal) → auto-ACCEPT.
+- `0.15 ≤ coverage < 0.5`, or replacement signal → QUEUE.
+- `coverage < 0.15` → no match: the anchor is unconstrained by this map — with a newer
+  matched observation this becomes `sd ∈ (1936, newer]` (absence is evidence too, where
+  extraction quality is trusted).
 - Extracted feature with no OSM match, area ≥ 30 m² → QUEUE as *demolished candidate*;
   below 30 m² → dropped but counted in `report.json` (no silent truncation).
 - OSM building with no extracted match → unconstrained by this map (report counts only).
