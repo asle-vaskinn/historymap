@@ -12,8 +12,33 @@ cases, but partial overlaps, multi-candidate matches, demolished-building candid
 date conflicts need review. This design adds the missing **editor entry point** for that
 workflow: a focused localhost review tool, plus the DATE-stage matcher that feeds it.
 
-Explicitly out of scope: georeferencing (stays in `source_manager.html`), ML extraction
-control (stays in `feature_extraction.html`), public viewer changes.
+GCP placement itself stays in `source_manager.html` and extraction internals stay in
+`ml/` — but the review tool must close the loop with both: reviewing matches is how you
+*discover* warp problems, so adjusting the warp and redoing extraction are first-class
+parts of this workflow (see "The map loop" and "Warp adjustment & re-extraction" below).
+Out of scope: public viewer changes.
+
+## The map loop (overall structure of "tackling a map")
+
+```
+        ┌──────────────────────────────────────────────────────────────┐
+        │                                                              ▼
+  [1] GEOREF          [2] EXTRACT           [3] ALIGN         [4] MATCH (DATE)
+  source_manager      ml/predict.py         align_to_osm.py   scripts/date/match_map.py
+  GCPs → warp .tif    + ml/vectorize.py     TPS/affine        coverage/containment rules
+        ▲                                                              │
+        │                                                              ▼
+        │             [6] PUBLISH                             [5] REVIEW
+        │             normalize_map_review → merge → export   date_review.html
+        │             → viewer shows sd ≤ year                accept/reject/demolished
+        │                                                              │
+        └───── "warp is off here" ─────────────────────────────────────┘
+```
+
+Steps 2–4 run as ONE chained job (`rerun`, below). Step 5 feeds back into step 1 when
+review reveals systematic offsets; decisions survive the round trip (see Decision
+identity). Each map source walks this loop until its QUEUE is drained, then the next
+older map starts — inheriting the previous map's dates as conflict-detection context.
 
 **Prerequisite (not part of this build, done first as data work):** an actual extraction
 for the target map — run `ml/predict.py` + `ml/vectorize.py` on the warped
@@ -53,9 +78,13 @@ scripts/normalize/normalize_map_review.py    # NEW, standard BaseNormalizer
   # → consumed by the existing merge stage like any other source
 
 backend/app.py                                # 3 NEW endpoints
-  GET  /api/review/{map_id}            # queue + progress + report summary
+  GET  /api/review/{map_id}            # queue + progress + report summary + offset hints
   POST /api/review/{map_id}/decision   # {item_id, action: accept|reject|demolished|skip, note?}
-  POST /api/review/{map_id}/rerun      # job-queue run of match_map.py
+  POST /api/review/{map_id}/rerun      # chained job via jobs.py (sequential queue):
+                                       #   {scope: "match" | "full"}
+                                       #   match: match_map.py only (thresholds changed)
+                                       #   full:  predict → vectorize → align → match
+                                       #          (after warp/GCP changes or model retrain)
 
 frontend/date_review.html + date_review.js (+ css)   # NEW focused page
   # vanilla MapLibre, no build step (house pattern)
@@ -117,22 +146,61 @@ interpretation rules:
   Full BLOCK semantics (halting export) deferred until the review loop has proven itself;
   `report.json` makes conflicts visible.
 
+## Warp adjustment & re-extraction
+
+Reviewing matches is the best detector of georeferencing error: a block of QUEUE items
+whose extracted footprints are all offset the same direction means the warp is wrong
+there, not the buildings.
+
+- **Offset hints:** `match_map.py` computes, per ~250 m grid cell, the mean centroid
+  offset (bearing + metres) of accepted/candidate matches and writes it into
+  `report.json`. The review UI renders cells with |offset| > ~5 m as a heat overlay —
+  "the warp is off here" is visible before any clicking.
+- **Adjust warp:** each review item and each heat cell has an "Adjust warp" action that
+  deep-links to `source_manager.html?source=<map_id>&lat=<..>&lon=<..>` — source_manager
+  gains support for those URL params (open catalog entry, pan its map to the location)
+  so the reviewer lands directly where GCPs need work. GCP editing/warping itself is
+  unchanged source_manager functionality.
+- **Redo extraction:** after re-warping (or retraining the model), the reviewer runs
+  `rerun {scope: "full"}` from the review tool: one sequential job chaining
+  predict → vectorize → align → match on the new .tif. Extraction is deterministic given
+  (image, checkpoint), so re-runs are safe and comparable; each rerun bumps a
+  `run_id` recorded in `report.json`.
+
+## Decision identity (decisions survive re-warp/re-extraction)
+
+Human decisions must not be lost when the warp or extraction changes underneath them.
+
+- **Item keys are stable across runs:** match items are keyed by the anchor —
+  `m:<osm_id>` (the OSM building is permanent). Demolished candidates have no anchor, so
+  they're keyed by a geometry fingerprint of the extracted feature —
+  `d:<centroid rounded to ~10 m>:<area bucket>` — which survives small warp shifts.
+- **Re-apply or re-open:** on each matcher run, prior decisions re-apply automatically
+  when the item's evidence is materially unchanged (coverage within ±0.15 of what the
+  reviewer saw, same top candidate). If the evidence moved more than that, the item
+  returns to QUEUE flagged `stale_decision` with the old decision shown on the card —
+  one keypress re-confirms it.
+- `decisions.json` records the evidence snapshot (`coverage`, `top_candidate`, `run_id`)
+  alongside each decision to make this check possible.
+
 ## Queue item shape (synthetic example)
 
 ```json
 {
-  "item_id": "t1936_q_00042",
-  "type": "low_overlap | multi_candidate | demolished | conflict",
+  "item_id": "m:way/123",
+  "type": "low_overlap | multi_candidate | replacement | demolished | conflict",
   "map_id": "trondheim_1936",
   "map_year": 1936,
+  "run_id": 3,
   "extracted": { "geometry": "<GeoJSON>", "mlc": 0.87, "area_m2": 142.0 },
-  "candidates": [ { "osm_id": "way/123", "iou": 0.31, "centroid_dist_m": 6.2 } ],
-  "context": { "existing_sd": null, "existing_sd_src": null }
+  "candidates": [ { "osm_id": "way/123", "coverage": 0.31, "iou": 0.22, "centroid_dist_m": 6.2 } ],
+  "context": { "existing_sd": null, "existing_sd_src": null, "stale_decision": null }
 }
 ```
 
-Decision record: `{ "item_id", "action", "chosen_osm_id?", "note?", "decided_at" }` —
-appended to `decisions.json`; latest decision per item wins (undo = re-decide).
+Decision record:
+`{ "item_id", "action", "chosen_osm_id?", "note?", "decided_at", "evidence": { "coverage", "top_candidate", "run_id" } }`
+— appended to `decisions.json`; latest decision per item wins (undo = re-decide).
 
 ## UI
 
