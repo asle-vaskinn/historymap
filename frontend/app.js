@@ -93,6 +93,10 @@ let layerVisibility = {
     confidenceOverlay: false
 };
 
+// Show buildings whose date is only estimated (ev='l'); they render muted.
+// Toggle off to see only genuinely dated buildings.
+let showEstimated = true;
+
 // Cache for GeoJSON data to enable accurate counting
 let buildingsDataCache = null;
 let roadsDataCache = null;
@@ -698,6 +702,9 @@ function createMapStyle(year) {
                     'fill-opacity': [
                         'case',
                         ['==', ['get', 'ev'], 'h'], 0.85,
+                        // Low evidence (estimated/inherited dates) renders muted
+                        // so the map doesn't imply false precision
+                        ['==', ['get', 'ev'], 'l'], 0.35,
                         0.7
                     ]
                 }
@@ -726,7 +733,11 @@ function createMapStyle(year) {
                         12, 0.5,
                         16, 1
                     ],
-                    'line-opacity': 0.8
+                    'line-opacity': [
+                        'case',
+                        ['==', ['get', 'ev'], 'l'], 0.4,
+                        0.8
+                    ]
                 }
             },
 
@@ -936,13 +947,10 @@ function createMlSourceFilter() {
  * @returns {array} MapLibre filter expression
  */
 function createBuildingFilter(year) {
-    // Temporal filter: building existed at the given year
-    // Case 1: Building has sd - show if sd <= year AND (no ed OR ed >= year)
-    // Case 2: Building has no sd - fallback: show only for years >= 1960
+    // Temporal filter: building existed at the given year.
+    // Every exported building carries sd (spec: no fallback defaults —
+    // a feature without a dated observation is not in the dataset).
     // Note: Using legacy filter syntax (property names as strings)
-    // Note: Buildings use '_src' field (with underscore)
-    const FALLBACK_YEAR = 1960;
-
     const hasDateFilter = [
         'all',
         ['has', 'sd'],
@@ -953,15 +961,10 @@ function createBuildingFilter(year) {
         ]
     ];
 
-    // Build temporal filter - include undated buildings only if year >= fallback
-    let temporalFilter;
-    if (year >= FALLBACK_YEAR) {
-        // Show buildings with dates OR buildings without dates
-        temporalFilter = ['any', hasDateFilter, ['!has', 'sd']];
-    } else {
-        // Only show buildings with dates in range
-        temporalFilter = hasDateFilter;
-    }
+    // Optionally hide low-evidence (estimated) buildings entirely
+    const temporalFilter = showEstimated
+        ? hasDateFilter
+        : ['all', hasDateFilter, ['!=', 'ev', 'l']];
 
     // If source filter is disabled (production mode), just apply temporal filter
     if (!sourceFilterEnabled) {
@@ -1106,34 +1109,19 @@ function createRoadDateRangeFilter() {
  * @returns {array} MapLibre filter expression
  */
 function createRoadFilter(year) {
-    // Fallback year for roads without dates (similar to buildings)
-    const ROAD_FALLBACK_YEAR = 2000;
-
-    // Build temporal filter with fallback for undated roads
-    // Roads WITH sd: show if sd <= year AND (no ed OR ed > year)
-    // Roads WITHOUT sd: show only if year >= ROAD_FALLBACK_YEAR
-    const hasDateFilter = [
+    // Temporal filter: every exported road carries sd (spec: no fallback
+    // defaults). Roads show if sd <= year AND (no ed OR ed > year).
+    // Changed from >= to > so roads hide in the year they were removed.
+    const temporalFilter = [
         'all',
         ['has', 'sd'],
         ['<=', 'sd', year],
-        // end_date > year OR no end_date (road still exists at this year)
-        // Changed from >= to > so roads hide in the year they were removed
         [
             'any',
             ['!has', 'ed'],
             ['>', 'ed', year]
         ]
     ];
-
-    // Build temporal filter - include undated roads only if year >= fallback
-    let temporalFilter;
-    if (year >= ROAD_FALLBACK_YEAR) {
-        // Show roads with dates OR roads without dates
-        temporalFilter = ['any', hasDateFilter, ['!has', 'sd']];
-    } else {
-        // Only show roads with dates in range
-        temporalFilter = hasDateFilter;
-    }
 
     // Build source filter
     const srcFilter = createRoadSourceFilter();
@@ -1150,15 +1138,11 @@ function createRoadFilter(year) {
         // Post-1950: show all roads
         eraFilter = null;
     } else if (year >= 1900) {
-        // 1900-1950: show if has evidence with sd <= year, or modern (no date)
+        // 1900-1950: require medium/high evidence with sd <= year
         eraFilter = [
-            'any',
-            ['!has', 'sd'],
-            [
-                'all',
-                ['any', ['==', 'ev', 'h'], ['==', 'ev', 'm']],
-                ['<=', 'sd', year]
-            ]
+            'all',
+            ['any', ['==', 'ev', 'h'], ['==', 'ev', 'm']],
+            ['<=', 'sd', year]
         ];
     } else {
         // Pre-1900: only show with high evidence AND sd <= year
@@ -2128,6 +2112,18 @@ function initLayerToggles() {
             layerVisibility.roadsHistorical = visible;
             layerVisibility.landuse = visible;
             toggleBackgroundLayers(visible);
+        });
+    }
+
+    // Estimated-buildings toggle — hide/show low-evidence (ev='l') buildings
+    const estimatedBtn = document.getElementById('toggleEstimated');
+    if (estimatedBtn) {
+        estimatedBtn.addEventListener('click', () => {
+            estimatedBtn.classList.toggle('active');
+            showEstimated = estimatedBtn.classList.contains('active');
+            if (map && map.loaded()) {
+                updateLayerFilters(currentYear);
+            }
         });
     }
 

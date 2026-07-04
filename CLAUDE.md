@@ -169,7 +169,8 @@ Before any PR/commit:
 2. PMTiles require HTTP Range requests: never `python3 -m http.server`, never enable gzip for `/data/` in nginx.
 3. Backend API from browser/host is `localhost:8080/api/` (via nginx), not `:5000`.
 4. Match existing patterns: Result type (`scripts/result.py`) in pipeline code, MapLibre *legacy* filter syntax in frontend, `BaseIngestor`/`BaseNormalizer` for new sources.
-5. Frontend fallback years (undated buildings appear from 1960, roads from 2000) are intentional.
+5. No fallback years: every exported feature carries `sd` (spec: `feat_temporal_pipeline/SPEC.md`).
+   Low-evidence (`ev='l'`) buildings render muted; the "Estimated" toggle hides them.
 6. Affine/TPS transform math is duplicated between `source_manager.html` and `feature_extraction.js` — fixes likely belong in both; flag it.
 
 ## Documentation Rules

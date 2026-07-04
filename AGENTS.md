@@ -324,8 +324,9 @@ cross-reference related docs.
    the pipeline stage instead. `data/merged/` and `data/export/` are safe to delete to force
    regeneration; `data/sources/*/raw/` and the `manifest.json` state files are not.
 5. **One job at a time** in the backend; jobs vanish from the API on restart (disk artifacts remain).
-6. **Frontend fallback years**: undated buildings appear from 1960, undated roads from 2000 —
-   intentional, not a bug. Don't "fix" without checking `docs/spec/feat_temporal_pipeline/`.
+6. **No frontend fallback years** (removed 2026-07-04 per `docs/spec/feat_temporal_pipeline/SPEC.md`):
+   every exported feature carries `sd`. Low-evidence (`ev='l'`) buildings render muted (0.35
+   opacity); the "Estimated" toggle in the viewer hides them entirely.
 7. **`frontend/legacy/` was removed 2026-07-04** (recover via git history); current tools are
    `source_manager.html` and `feature_extraction.{html,js,css}` (renamed from `source_viewer.*` —
    some docs still use the old name).
