@@ -41,7 +41,6 @@ manual edits, and ML extraction (U-Net) from georeferenced historical Kartverket
 |------|------|-------------|
 | 8080 | nginx → frontend + everything else | `docker compose up` (host port) |
 | 5000 | FastAPI backend (`backend/app.py`) | Docker only; **not** published to host — reach it via nginx at `localhost:8080/api/` |
-| 5001 | Flask manual-edit API (`scripts/api/server.py`) | Standalone, run manually; frontend edit mode POSTs here directly |
 
 ---
 
@@ -182,12 +181,10 @@ only in `feature_extraction.html`.
   per-location — adding a global CORS header will duplicate them and break responses.
 - `client_max_body_size 100M` for georef image uploads.
 
-### Other servers (standalone, started manually when needed)
+### Retired standalone servers (all consolidated into the FastAPI backend 2026-07-04)
 
-- `scripts/api/server.py` (Flask, :5001): `GET/POST /api/manual` (manual building edits),
-  `POST /api/rebuild` (runs normalize→merge→export). Required by index.html edit mode.
-- The former water editor (:5002) and legacy georef server (:8082) were removed 2026-07-04 —
-  their functionality lives in the FastAPI `/api/water/*` and `/api/georef/*` endpoints.
+- Flask manual-edit API (:5001) → `GET/POST /api/manual`, `POST /api/rebuild` in `backend/app.py`.
+- Water editor (:5002) → `/api/water/*`; legacy georef server (:8082) → `/api/georef/*`.
 
 ---
 

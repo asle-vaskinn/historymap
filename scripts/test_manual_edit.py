@@ -32,7 +32,7 @@ MERGED_PATH = DATA_DIR / 'merged' / 'buildings_merged.geojson'
 EXPORT_PATH = DATA_DIR / 'export' / 'buildings.geojson'
 
 # Test configuration
-API_URL = 'http://localhost:5001'
+API_URL = 'http://localhost:8080'  # nginx proxy → FastAPI backend (/api/manual, /api/rebuild)
 TEST_OSM_ID = 'way/test_building_12345'  # Unique test ID
 TEST_SD = 1888  # Test construction year
 TEST_GEOMETRY = {

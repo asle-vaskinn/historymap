@@ -91,9 +91,9 @@ Data pipeline: data/sources/*/raw → normalize → data/merged/ → export → 
 ML: U-Net (segmentation-models-pytorch) — ml/train.py → predict.py → vectorize.py
 ```
 
-Ports: **8080** nginx (only host-published port; backend reached via `/api/`),
-5001 Flask manual-edit API (`scripts/api/server.py`, standalone — needed by index.html edit mode),
-See AGENTS.md §1.
+Ports: **8080** nginx (only host-published port; backend reached via `/api/`).
+All APIs — including manual edits (`/api/manual`) and rebuild (`/api/rebuild`) —
+live in the FastAPI backend behind nginx. See AGENTS.md §1.
 
 ## Data Schema
 

@@ -2474,7 +2474,7 @@ function showEditPopup(buildingData, coordinates, geometry) {
  */
 async function saveManualEdit(osmId, geometry, newSd, newEd) {
     try {
-        const response = await fetch('http://localhost:5001/api/manual', {
+        const response = await fetch('/api/manual', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -3116,7 +3116,7 @@ async function loadManualEdits() {
     if (!map) return;
 
     try {
-        const response = await fetch('http://localhost:5001/api/manual');
+        const response = await fetch('/api/manual');
         if (!response.ok) {
             console.warn('Could not load manual edits:', response.status);
             return;
@@ -3189,7 +3189,7 @@ async function triggerRebuild() {
     }
 
     try {
-        const response = await fetch('http://localhost:5001/api/rebuild', {
+        const response = await fetch('/api/rebuild', {
             method: 'POST'
         });
 
