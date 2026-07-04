@@ -651,11 +651,13 @@ function createMapStyle(year) {
                         10, 1.5,
                         14, 3.5
                     ],
-                    // Opacity based on evidence strength
+                    // Opacity based on evidence strength; undated roads
+                    // (age unknown) render most muted
                     'line-opacity': [
                         'case',
                         ['==', ['get', 'ev'], 'h'], 0.9,
                         ['==', ['get', 'ev'], 'm'], 0.7,
+                        ['!', ['has', 'sd']], 0.35,
                         0.5
                     ]
                 }
@@ -1109,10 +1111,9 @@ function createRoadDateRangeFilter() {
  * @returns {array} MapLibre filter expression
  */
 function createRoadFilter(year) {
-    // Temporal filter: every exported road carries sd (spec: no fallback
-    // defaults). Roads show if sd <= year AND (no ed OR ed > year).
+    // Temporal filter for dated roads: sd <= year AND (no ed OR ed > year).
     // Changed from >= to > so roads hide in the year they were removed.
-    const temporalFilter = [
+    const hasDateFilter = [
         'all',
         ['has', 'sd'],
         ['<=', 'sd', year],
@@ -1122,6 +1123,14 @@ function createRoadFilter(year) {
             ['>', 'ed', year]
         ]
     ];
+
+    // Road dating is largely unsolved (47 of 36,730 roads carry a real sd
+    // until the backward map pass lands). Undated roads render muted and
+    // follow the 'Estimated' toggle instead of a baked-in fallback year;
+    // the era filter below still hides them before 1950.
+    const temporalFilter = showEstimated
+        ? ['any', hasDateFilter, ['!has', 'sd']]
+        : hasDateFilter;
 
     // Build source filter
     const srcFilter = createRoadSourceFilter();

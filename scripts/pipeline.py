@@ -264,9 +264,11 @@ def run_export_roads(data_dir: Path, pmtiles: bool = True) -> bool:
         return False
 
     # Export to data/export/ (rebuild.sh copies to frontend/data/)
+    # Filenames must match constants.ROADS_EXPORT/ROADS_PMTILES — the
+    # frontend fetches data/roads_temporal.geojson
     export_dir = data_dir / 'export'
     export_dir.mkdir(parents=True, exist_ok=True)
-    output_path = export_dir / 'roads.geojson'
+    output_path = export_dir / 'roads_temporal.geojson'
 
     from export.export_roads import export_roads, generate_pmtiles
 
@@ -277,7 +279,7 @@ def run_export_roads(data_dir: Path, pmtiles: bool = True) -> bool:
 
     # Optionally convert to PMTiles
     if pmtiles:
-        pmtiles_path = export_dir / 'roads.pmtiles'
+        pmtiles_path = export_dir / 'roads_temporal.pmtiles'
         print(f"\nExporting roads PMTiles...")
         if not generate_pmtiles(output_path, pmtiles_path):
             print("  Roads PMTiles generation failed (tippecanoe may not be installed)")
