@@ -12,6 +12,14 @@
 **Decision format:** every decision below lists 3–4 options; the **recommended** option is
 marked ✅ and is the one this proposal adopts.
 
+> **Cross-reference (2026-07-04):** This proposal is **complementary** to
+> `docs/spec/feat_temporal_pipeline/SPEC.md`, which is the current approved
+> pipeline intent. This PROPOSAL supplies the registry fix-points
+> (Matrikkelen/SEFRAK construction dates, `sd`); the SPEC supplies the
+> backward map-window algorithm that bounds everything else. Division of
+> labour holds across both: registries = construction dates (`sd`),
+> historical maps = demolition discovery (`ed`).
+
 ---
 
 ## Why (the diagnosis)
@@ -56,11 +64,18 @@ multiplied by getting this right first. (B is demoted — see Decision 6; C and 
 | C. **OSM `start_date` only** | Tiny (34 today) | High where present | Already wired; community-dependent |
 | D. **Keep relying on ML / inheritance** | Status quo | Low | None |
 
-✅ **Recommended: A — Matrikkelen.** It is the authoritative source of construction year
-for nearly every building in Norway and maps cleanly onto `sd` as high evidence. It is
-already a (disabled) entry in `merge_config.json`. FKB (B) is a strong secondary later, but
-its primary value is geometry, which OSM already provides. Expected impact: **8.6% → ~80–90%
-genuinely dated.**
+✅ ~~**Recommended: A — Matrikkelen.**~~ **INVALIDATED 2026-07-04:** Kartverket confirms
+byggeår is *not registered in Matrikkelen at all* — for any building, open or restricted
+access ([kartverket.no/…/byggear-for-bygninger-og-bruksenheter](https://www.kartverket.no/en/property/mine-eiendommer/bygning-og-bruksenheter/byggear-for-bygninger-og-bruksenheter)).
+The nearest proxies (midlertidig brukstillatelse / ferdigattest dates) exist only from
+2009 onward — useful for dating *new* construction and for `ed` via bygningsstatus
+"revet", but not for historical coverage.
+
+**Revised recommendation:** the backward map/aerial pass
+(`feat_temporal_pipeline/SPEC.md` §5b–5d) becomes the *primary* dating engine, with
+registry supplements: Byantikvaren kulturminnekart (~5,000 Trondheim buildings with
+byggeår), SEFRAK (already ingested), OSM `start_date`, and post-2009 matrikkel status
+dates. Expected coverage comes from map/aerial windows (`ev=m`), not registry `ev=h`.
 
 ---
 
@@ -115,6 +130,10 @@ A residual set will remain (new builds, unmatched). Today they silently appear a
 ✅ **Recommended: C.** Undated/low-evidence buildings render muted (e.g. reduced opacity or
 hatch) with a toggle to hide them. The map stops implying false precision while staying full.
 This is a small `app.js` change reusing the existing `ev`/`sd_method` fields.
+
+> **Shipped 2026-07-04:** Option C is implemented — the silent frontend
+> 1960/2000 fallback was removed, and `ev='l'` buildings render muted with an
+> "Estimated" toggle.
 
 ---
 

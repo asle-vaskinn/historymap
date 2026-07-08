@@ -1,5 +1,10 @@
 # Feature: Temporal Data Extraction
 
+> **Status (2026-07-04): Superseded.** This README describes the OLD
+> find/verify design. The current approved design is `SPEC.md` in this same
+> directory (backward map pass, registry fix-points first, no fallback
+> defaults). Kept for historical reference.
+
 Build a temporal dataset of features (buildings, roads, nature) by combining multiple sources.
 
 ## Operations

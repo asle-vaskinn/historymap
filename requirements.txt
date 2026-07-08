@@ -67,9 +67,11 @@ matplotlib>=3.7.0
 # wandb>=0.16.0
 
 # ============================================================
-# Optional: Development Tools
+# Development Tools — testing
 # ============================================================
-# pytest>=7.4.0
+pytest>=7.4.0
+pytest-testmon>=2.1.0   # scoped iteration: re-runs only tests affected by a change
+pytest-watch>=4.2.0     # `ptw` watch loop (defaults to --testmon, see pytest.ini)
 # pytest-cov>=4.1.0
 # black>=23.7.0
 # flake8>=6.1.0

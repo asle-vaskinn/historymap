@@ -1,5 +1,10 @@
 # Water Pipeline Handover
 
+> **Note (2026-07-04):** The `source_viewer.*` tool referenced throughout this
+> document has been renamed — it is now `frontend/feature_extraction.html` /
+> `feature_extraction.js`. Line-number references below apply to the old file
+> and are approximate in the renamed tool.
+
 **Date:** 2026-01-01
 **From:** Claude (pipeline/ML work)
 **To:** Claude (source_viewer work)

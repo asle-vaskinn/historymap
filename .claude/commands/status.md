@@ -35,10 +35,10 @@ count=$(ls data/annotations/masks/*.png 2>/dev/null | wc -l)
 echo "Annotations: $count"
 ls data/extracted/*.geojson 2>/dev/null && echo "✓ Extractions exist" || echo "✗ No extractions"
 
-# Phase 5 artifacts
-echo -e "\n=== Phase 5: Production ==="
-[ -f "production/Dockerfile" ] && echo "✓ Dockerfile exists" || echo "✗ Dockerfile missing"
-[ -f "data/final/trondheim_historical.pmtiles" ] && echo "✓ Final tiles exist" || echo "✗ Final tiles missing"
+# Export artifacts
+echo -e "\n=== Export ==="
+[ -f "data/export/manifest.json" ] && echo "✓ Export manifest exists" || echo "✗ Export manifest missing"
+[ -f "data/export/trondheim.pmtiles" ] && echo "✓ Base tiles exist" || echo "✗ Base tiles missing"
 ```
 
 ## Output Format

@@ -126,9 +126,9 @@ def test_version_placeholder_exists():
 ## Phase 4 — Cleanup, docs, cutover
 
 ### Task 4.1: Retire dead scaffolding (AC9)
-- [ ] Delete or mark deprecated: `production/deploy-cloudflare.sh`, `production/deploy-github-pages.sh`.
-- [ ] Fix or remove the broken `production/Dockerfile` (`COPY ... 2>/dev/null || true` is invalid; prod is static-only).
-- [ ] Commit.
+- [x] Delete or mark deprecated: `production/deploy-cloudflare.sh`, `production/deploy-github-pages.sh` — entire `production/` dir removed 2026-07-04.
+- [x] Fix or remove the broken `production/Dockerfile` — removed with the directory.
+- [x] Commit.
 
 ### Task 4.2: `docs/tech/DEPLOYMENT.md` (AC9)
 - [ ] Authoritative runbook: VPS, tenant layout, port block, the workflows, the data-sync step, rollback, and the user-only steps (DNS, secrets, provision).

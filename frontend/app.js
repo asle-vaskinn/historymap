@@ -93,6 +93,10 @@ let layerVisibility = {
     confidenceOverlay: false
 };
 
+// Show buildings whose date is only estimated (ev='l'); they render muted.
+// Toggle off to see only genuinely dated buildings.
+let showEstimated = true;
+
 // Cache for GeoJSON data to enable accurate counting
 let buildingsDataCache = null;
 let roadsDataCache = null;
@@ -647,11 +651,13 @@ function createMapStyle(year) {
                         10, 1.5,
                         14, 3.5
                     ],
-                    // Opacity based on evidence strength
+                    // Opacity based on evidence strength; undated roads
+                    // (age unknown) render most muted
                     'line-opacity': [
                         'case',
                         ['==', ['get', 'ev'], 'h'], 0.9,
                         ['==', ['get', 'ev'], 'm'], 0.7,
+                        ['!', ['has', 'sd']], 0.35,
                         0.5
                     ]
                 }
@@ -698,6 +704,10 @@ function createMapStyle(year) {
                     'fill-opacity': [
                         'case',
                         ['==', ['get', 'ev'], 'h'], 0.85,
+                        // Undated or low-evidence buildings render muted
+                        // so the map doesn't imply false precision
+                        ['!', ['has', 'sd']], 0.35,
+                        ['==', ['get', 'ev'], 'l'], 0.35,
                         0.7
                     ]
                 }
@@ -726,7 +736,12 @@ function createMapStyle(year) {
                         12, 0.5,
                         16, 1
                     ],
-                    'line-opacity': 0.8
+                    'line-opacity': [
+                        'case',
+                        ['!', ['has', 'sd']], 0.4,
+                        ['==', ['get', 'ev'], 'l'], 0.4,
+                        0.8
+                    ]
                 }
             },
 
@@ -936,13 +951,8 @@ function createMlSourceFilter() {
  * @returns {array} MapLibre filter expression
  */
 function createBuildingFilter(year) {
-    // Temporal filter: building existed at the given year
-    // Case 1: Building has sd - show if sd <= year AND (no ed OR ed >= year)
-    // Case 2: Building has no sd - fallback: show only for years >= 1960
+    // Temporal filter for dated buildings: sd <= year AND (no ed OR ed >= year).
     // Note: Using legacy filter syntax (property names as strings)
-    // Note: Buildings use '_src' field (with underscore)
-    const FALLBACK_YEAR = 1960;
-
     const hasDateFilter = [
         'all',
         ['has', 'sd'],
@@ -953,15 +963,14 @@ function createBuildingFilter(year) {
         ]
     ];
 
-    // Build temporal filter - include undated buildings only if year >= fallback
-    let temporalFilter;
-    if (year >= FALLBACK_YEAR) {
-        // Show buildings with dates OR buildings without dates
-        temporalFilter = ['any', hasDateFilter, ['!has', 'sd']];
-    } else {
-        // Only show buildings with dates in range
-        temporalFilter = hasDateFilter;
-    }
+    // Most OSM buildings have no dated observation yet (Matrikkelen /
+    // backward map pass pending). No fallback year is applied: undated
+    // buildings render muted and follow the 'Estimated' toggle, same as
+    // undated roads. Low-evidence (ev='l') dated buildings are treated
+    // as estimated too.
+    const temporalFilter = showEstimated
+        ? ['any', hasDateFilter, ['!has', 'sd']]
+        : ['all', hasDateFilter, ['!=', 'ev', 'l']];
 
     // If source filter is disabled (production mode), just apply temporal filter
     if (!sourceFilterEnabled) {
@@ -1106,18 +1115,12 @@ function createRoadDateRangeFilter() {
  * @returns {array} MapLibre filter expression
  */
 function createRoadFilter(year) {
-    // Fallback year for roads without dates (similar to buildings)
-    const ROAD_FALLBACK_YEAR = 2000;
-
-    // Build temporal filter with fallback for undated roads
-    // Roads WITH sd: show if sd <= year AND (no ed OR ed > year)
-    // Roads WITHOUT sd: show only if year >= ROAD_FALLBACK_YEAR
+    // Temporal filter for dated roads: sd <= year AND (no ed OR ed > year).
+    // Changed from >= to > so roads hide in the year they were removed.
     const hasDateFilter = [
         'all',
         ['has', 'sd'],
         ['<=', 'sd', year],
-        // end_date > year OR no end_date (road still exists at this year)
-        // Changed from >= to > so roads hide in the year they were removed
         [
             'any',
             ['!has', 'ed'],
@@ -1125,15 +1128,13 @@ function createRoadFilter(year) {
         ]
     ];
 
-    // Build temporal filter - include undated roads only if year >= fallback
-    let temporalFilter;
-    if (year >= ROAD_FALLBACK_YEAR) {
-        // Show roads with dates OR roads without dates
-        temporalFilter = ['any', hasDateFilter, ['!has', 'sd']];
-    } else {
-        // Only show roads with dates in range
-        temporalFilter = hasDateFilter;
-    }
+    // Road dating is largely unsolved (47 of 36,730 roads carry a real sd
+    // until the backward map pass lands). Undated roads render muted and
+    // follow the 'Estimated' toggle instead of a baked-in fallback year;
+    // the era filter below still hides them before 1950.
+    const temporalFilter = showEstimated
+        ? ['any', hasDateFilter, ['!has', 'sd']]
+        : hasDateFilter;
 
     // Build source filter
     const srcFilter = createRoadSourceFilter();
@@ -1150,15 +1151,11 @@ function createRoadFilter(year) {
         // Post-1950: show all roads
         eraFilter = null;
     } else if (year >= 1900) {
-        // 1900-1950: show if has evidence with sd <= year, or modern (no date)
+        // 1900-1950: require medium/high evidence with sd <= year
         eraFilter = [
-            'any',
-            ['!has', 'sd'],
-            [
-                'all',
-                ['any', ['==', 'ev', 'h'], ['==', 'ev', 'm']],
-                ['<=', 'sd', year]
-            ]
+            'all',
+            ['any', ['==', 'ev', 'h'], ['==', 'ev', 'm']],
+            ['<=', 'sd', year]
         ];
     } else {
         // Pre-1900: only show with high evidence AND sd <= year
@@ -2131,6 +2128,18 @@ function initLayerToggles() {
         });
     }
 
+    // Estimated-buildings toggle — hide/show low-evidence (ev='l') buildings
+    const estimatedBtn = document.getElementById('toggleEstimated');
+    if (estimatedBtn) {
+        estimatedBtn.addEventListener('click', () => {
+            estimatedBtn.classList.toggle('active');
+            showEstimated = estimatedBtn.classList.contains('active');
+            if (map && map.loaded()) {
+                updateLayerFilters(currentYear);
+            }
+        });
+    }
+
     // Debug mode toggle - shows date sources with color coding
     const debugBtn = document.getElementById('toggleDebug');
     const debugLegend = document.getElementById('debugLegend');
@@ -2474,7 +2483,7 @@ function showEditPopup(buildingData, coordinates, geometry) {
  */
 async function saveManualEdit(osmId, geometry, newSd, newEd) {
     try {
-        const response = await fetch('http://localhost:5001/api/manual', {
+        const response = await fetch('/api/manual', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -3116,7 +3125,7 @@ async function loadManualEdits() {
     if (!map) return;
 
     try {
-        const response = await fetch('http://localhost:5001/api/manual');
+        const response = await fetch('/api/manual');
         if (!response.ok) {
             console.warn('Could not load manual edits:', response.status);
             return;
@@ -3189,7 +3198,7 @@ async function triggerRebuild() {
     }
 
     try {
-        const response = await fetch('http://localhost:5001/api/rebuild', {
+        const response = await fetch('/api/rebuild', {
             method: 'POST'
         });
 

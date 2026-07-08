@@ -1017,6 +1017,135 @@ async def get_water_features():
 
 
 # ==========================================
+# Manual building edits (ported from the retired Flask :5001 server)
+# ==========================================
+
+MANUAL_EDITS_FILE = Path("/app/data/sources/manual/raw/edits.json")
+
+
+class ManualEdit(BaseModel):
+    osm_id: str
+    geometry: Dict[str, Any]
+    sd: int
+    ed: Optional[int] = None
+    note: str = ""
+
+
+def load_manual_edits() -> Dict[str, Any]:
+    """Load manual edits FeatureCollection, creating it if missing."""
+    if not MANUAL_EDITS_FILE.exists():
+        MANUAL_EDITS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        empty = {"type": "FeatureCollection", "features": []}
+        with open(MANUAL_EDITS_FILE, 'w') as f:
+            json.dump(empty, f, indent=2)
+        return empty
+    with open(MANUAL_EDITS_FILE) as f:
+        return json.load(f)
+
+
+def save_manual_edits(collection: Dict[str, Any]) -> None:
+    """Persist the manual edits FeatureCollection."""
+    with open(MANUAL_EDITS_FILE, 'w') as f:
+        json.dump(collection, f, indent=2)
+
+
+@app.get("/api/manual")
+async def get_manual_edits():
+    """Return all manual building edits as a GeoJSON FeatureCollection."""
+    try:
+        return load_manual_edits()
+    except Exception as e:
+        logger.error(f"Error loading manual edits: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/manual", status_code=201)
+async def add_manual_edit(edit: ManualEdit):
+    """Create or update a manual building edit (keyed by osm_id)."""
+    try:
+        edits = load_manual_edits()
+    except Exception as e:
+        logger.error(f"Error loading manual edits: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+    feature = {
+        "type": "Feature",
+        "geometry": edit.geometry,
+        "properties": {
+            "osm_id": edit.osm_id,
+            "sd": edit.sd,
+            "ed": edit.ed,
+            "src": "manual",
+            "ev": "h",  # manual edits are high evidence
+            "note": edit.note,
+            "edited_at": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+        },
+    }
+
+    features = [
+        f for f in edits['features']
+        if f.get('properties', {}).get('osm_id') != edit.osm_id
+    ]
+    features.append(feature)
+    updated = {**edits, "features": features}
+
+    try:
+        save_manual_edits(updated)
+        logger.info(f"Saved manual edit for {edit.osm_id}")
+        return feature
+    except Exception as e:
+        logger.error(f"Error saving manual edit: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/rebuild")
+def rebuild_pipeline():
+    """
+    Re-run normalize (manual source) → merge → export so manual edits land
+    in the served data. Runs synchronously in FastAPI's threadpool.
+
+    PMTiles regeneration requires tippecanoe; the export stage skips PMTiles
+    with a warning when it is not installed in the backend image.
+    """
+    import subprocess
+    import sys as _sys
+    import os as _os
+
+    pipeline_script = Path("/app/scripts/pipeline.py")
+    if not pipeline_script.exists():
+        raise HTTPException(status_code=500, detail="Pipeline script not found")
+
+    env = {**_os.environ, "PYTHONPATH": "/app/scripts"}
+    stages = [
+        (['--stage', 'normalize', '--sources', 'manual'], 120),
+        (['--stage', 'merge'], 300),
+        (['--stage', 'export'], 600),
+    ]
+
+    for stage_args, timeout in stages:
+        try:
+            result = subprocess.run(
+                [_sys.executable, str(pipeline_script), *stage_args],
+                cwd="/app", env=env, capture_output=True, text=True,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Pipeline stage {stage_args} timed out after {timeout}s",
+            )
+        if result.returncode != 0:
+            logger.error(f"Rebuild stage {stage_args} failed: {result.stderr[-2000:]}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Pipeline stage {stage_args} failed: {result.stderr[-500:]}",
+            )
+
+    logger.info("Manual-edit rebuild completed")
+    return {"status": "success", "message": "Pipeline rebuilt successfully"}
+
+
+# ==========================================
 # Alignment API endpoint
 # ==========================================
 

@@ -441,4 +441,4 @@ See repository README for contact information.
 **Last Updated**: 2025-12-20
 
 This document is part of the Trondheim Historical Map project documentation.
-See also: [user_guide.md](../user_guide.md), [methodology.md](../tech/methodology.md)
+See also: [user_guide.md](../archive/user_guide.md) (archived), [methodology.md](../tech/methodology.md)

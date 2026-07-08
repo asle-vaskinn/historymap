@@ -2,6 +2,8 @@
 *.pyc
 __pycache__/
 .venv/
+.testmondata
+.pytest_cache/
 venv/
 
 # OS
@@ -39,7 +41,12 @@ data/merged/*.json
 
 # Export output
 data/export/
-data/extracted/
+
+# Archived legacy artifacts (data/archive/legacy_root/README.md documents them)
+data/archive/*
+!data/archive/legacy_root
+data/archive/legacy_root/*
+!data/archive/legacy_root/README.md
 
 # Training data
 data/synthetic/
@@ -51,9 +58,6 @@ data/georeference/
 data/trondheim_byarkiv/
 data/trondheim_wms/
 
-# Database files
-data/db/
-
 # Frontend generated data
 frontend/data/
 
@@ -62,8 +66,6 @@ models/
 results/
 
 # Temporary/working files
-data/cleanup.sh
-data/CLEANUP_RECOMMENDATIONS.md
 data/sources_manifest.json
 docs/archive/PMTILES_IMPLEMENTATION.md
 docs/archive/SOURCE_FILTER_FIX.md

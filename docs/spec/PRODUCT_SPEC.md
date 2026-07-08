@@ -1,5 +1,11 @@
 # Product Specification
 
+> **Status (2026-07-04):** Describes the fallback-based dating approach that
+> shipped through 2026-06; the approved replacement is
+> `docs/spec/feat_temporal_pipeline/SPEC.md` (no fallback defaults, backward
+> map pass). Kept as an accurate record of current pipeline code until the
+> redesign lands.
+
 ## Features
 
 ### Core Features

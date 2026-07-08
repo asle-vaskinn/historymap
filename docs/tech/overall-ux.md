@@ -318,7 +318,7 @@ Keep loose for now. Don't over-engineer city abstraction until there's a second 
 
 ## Next Actions
 
-1. ~~Rename `source_viewer.*` → `data_prep.*`~~ DONE - Refactored to modular `data_prep/` structure
+1. ~~Rename `source_viewer.*` → `data_prep.*`~~ DONE — the tool has since been renamed again and now lives as `frontend/feature_extraction.*` (the `data_prep`/`dataprep` structure was removed)
 2. ~~Water tooling~~ DONE - Ready for manual tracing
 3. Continue water tracing (Brattøra, Nedre Elvehavn, etc.)
 4. Update this document as workflow evolves

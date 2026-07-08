@@ -136,10 +136,14 @@ def validate_buildings(path: Path, verbose: bool = False) -> ValidationResult:
         if ed and (ed < MIN_VALID_YEAR or ed > MAX_VALID_YEAR):
             invalid_year_count += 1
 
-    # Report missing fields
+    # Report missing fields. Missing 'sd' is a coverage gap, not a validity
+    # error: the no-fallback model (feat_temporal_pipeline/SPEC.md) leaves
+    # features undated until a dated observation exists.
     for field, count in missing_fields_count.items():
         pct = (count / sample_size) * 100
-        if pct > 10:
+        if field == 'sd':
+            result.add_warning(f"Dating coverage gap: 'sd' missing in {count}/{sample_size} features ({pct:.1f}%)")
+        elif pct > 10:
             result.add_error(f"Field '{field}' missing in {count}/{sample_size} features ({pct:.1f}%)")
         elif pct > 0:
             result.add_warning(f"Field '{field}' missing in {count}/{sample_size} features ({pct:.1f}%)")
@@ -204,10 +208,13 @@ def validate_roads(path: Path, verbose: bool = False) -> ValidationResult:
         if 'src' in props:
             result.sources_found.add(props['src'])
 
-    # Report missing fields
+    # Report missing fields ('sd' is a coverage gap, not an error — see
+    # the buildings validator above)
     for field, count in missing_fields_count.items():
         pct = (count / sample_size) * 100
-        if pct > 10:
+        if field == 'sd':
+            result.add_warning(f"Dating coverage gap: 'sd' missing in {count}/{sample_size} features ({pct:.1f}%)")
+        elif pct > 10:
             result.add_error(f"Field '{field}' missing in {count}/{sample_size} features ({pct:.1f}%)")
         elif pct > 0:
             result.add_warning(f"Field '{field}' missing in {count}/{sample_size} features ({pct:.1f}%)")

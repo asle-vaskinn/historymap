@@ -41,9 +41,6 @@ manual edits, and ML extraction (U-Net) from georeferenced historical Kartverket
 |------|------|-------------|
 | 8080 | nginx → frontend + everything else | `docker compose up` (host port) |
 | 5000 | FastAPI backend (`backend/app.py`) | Docker only; **not** published to host — reach it via nginx at `localhost:8080/api/` |
-| 5001 | Flask manual-edit API (`scripts/api/server.py`) | Standalone, run manually; frontend edit mode POSTs here directly |
-| 5002 | Water editor (`scripts/water_editor.py`) | Standalone, run manually |
-| 8082 | Legacy georef server (`scripts/georef_server.py`) | Standalone; superseded by FastAPI georef endpoints |
 
 ---
 
@@ -74,7 +71,7 @@ PYTHONPATH=scripts python3 -m pytest tests/ -v   # unit tests (constants, Result
 python3 scripts/test_pipeline_e2e.py             # end-to-end pipeline test (inject→run→verify→cleanup)
 node --check frontend/app.js                     # JS syntax — run after EVERY frontend JS edit
 make test                                        # frontend checks + python syntax compile checks
-./scripts/validate_phase1.sh                     # artifact existence checks (also phase4, phase5)
+./scripts/validate_phase1.sh                     # artifact existence checks
 ```
 
 Backend code is volume-mounted into the container (`docker-compose.yml`), so backend/script
@@ -88,10 +85,9 @@ edits only need `docker compose restart`, never an image rebuild. Rebuild the im
 | Path | What it is | Edit freely? |
 |------|-----------|--------------|
 | `frontend/` | Vanilla JS MapLibre app, no build step | Yes — run `node --check` after |
-| `frontend/legacy/` | Superseded tools (dataprep, old georef/GCP/water editors) | **No** — read-only reference |
 | `backend/` | FastAPI app (`app.py`, ~1400 lines) + async job queue (`jobs.py`) | Yes |
 | `scripts/` | ~70 scripts; pipeline core + many one-offs (see §6 for which are load-bearing) | Core: carefully. One-offs: rarely needed |
-| `scripts/{ingest,normalize,merge,export,georef,db,ml,api,extract,generate,match}/` | Pipeline stage modules | Yes |
+| `scripts/{ingest,normalize,merge,export,ml,api}/` | Pipeline stage modules | Yes |
 | `ml/` | PyTorch U-Net training/inference/vectorization | Yes |
 | `data/` | All data (5+ GB). `sources/` (per-source raw+normalized), `merged/`, `export/`, `georeference/`, `training_*/`, `annotations/` | **Never** hand-edit generated files; manage via pipeline |
 | `models/checkpoints/` | Trained weights (`best_model.pth`, 172 MB) | No |
@@ -185,11 +181,10 @@ only in `feature_extraction.html`.
   per-location — adding a global CORS header will duplicate them and break responses.
 - `client_max_body_size 100M` for georef image uploads.
 
-### Other servers (standalone, started manually when needed)
+### Retired standalone servers (all consolidated into the FastAPI backend 2026-07-04)
 
-- `scripts/api/server.py` (Flask, :5001): `GET/POST /api/manual` (manual building edits),
-  `POST /api/rebuild` (runs normalize→merge→export). Required by index.html edit mode.
-- `scripts/water_editor.py` (:5002) and `scripts/georef_server.py` (:8082): legacy/standalone tools.
+- Flask manual-edit API (:5001) → `GET/POST /api/manual`, `POST /api/rebuild` in `backend/app.py`.
+- Water editor (:5002) → `/api/water/*`; legacy georef server (:8082) → `/api/georef/*`.
 
 ---
 
@@ -329,11 +324,12 @@ cross-reference related docs.
    the pipeline stage instead. `data/merged/` and `data/export/` are safe to delete to force
    regeneration; `data/sources/*/raw/` and the `manifest.json` state files are not.
 5. **One job at a time** in the backend; jobs vanish from the API on restart (disk artifacts remain).
-6. **Frontend fallback years**: undated buildings appear from 1960, undated roads from 2000 —
-   intentional, not a bug. Don't "fix" without checking `docs/spec/feat_temporal_pipeline/`.
-7. **`frontend/legacy/` is read-only history**; current tools are `source_manager.html` and
-   `feature_extraction.{html,js,css}` (recently renamed from `source_viewer.*` — some docs still
-   use the old name).
+6. **No frontend fallback years** (removed 2026-07-04 per `docs/spec/feat_temporal_pipeline/SPEC.md`):
+   every exported feature carries `sd`. Low-evidence (`ev='l'`) buildings render muted (0.35
+   opacity); the "Estimated" toggle in the viewer hides them entirely.
+7. **`frontend/legacy/` was removed 2026-07-04** (recover via git history); current tools are
+   `source_manager.html` and `feature_extraction.{html,js,css}` (renamed from `source_viewer.*` —
+   some docs still use the old name).
 8. **Type A vs Type B sources** in the frontend filter logic (timeline-filtered vs all-or-nothing
    ML snapshots) interact; test both `dateSourceFilter` and `snapshotFilter` paths after touching filters.
 9. **Stale docs exist**: root `PHASE*` files, parts of `IMPLEMENTATION_STATUS.md`, and older specs

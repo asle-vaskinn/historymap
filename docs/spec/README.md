@@ -16,12 +16,17 @@ For product-level specifications (UX, visual design, user requirements), see [PR
 
 | Feature | Description | Status | Dependencies |
 |---------|-------------|--------|--------------|
-| [feat_temporal_pipeline](./feat_temporal_pipeline/) | Combines multiple sources to build temporal dataset (core framework) | In Progress | - |
+| [feat_temporal_pipeline](./feat_temporal_pipeline/) | Temporal dataset design — SPEC.md is the current approved intent (backward map pass, no fallback defaults) | In Progress | - |
+| [feat_year_by_year](./feat_year_by_year/) | Proposal: Matrikkelen construction dates, honest muted rendering of estimates, playback UX | Proposed | feat_temporal_pipeline |
 | [feat_ml_extraction](./feat_ml_extraction/) | ML segmentation from historical maps using U-Net | Implemented | feat_temporal_pipeline |
 | [feat_sefrak_import](./feat_sefrak_import/) | Import SEFRAK cultural heritage data with construction dates | Implemented | feat_temporal_pipeline |
 | [feat_osm_baseline](./feat_osm_baseline/) | Import OSM as modern baseline for all features | Implemented | - |
 | [feat_timeline_ui](./feat_timeline_ui/) | Frontend time slider interface with year navigation | Implemented | feat_temporal_pipeline |
 | [feat_source_filter](./feat_source_filter/) | Filter map by data source (SEFRAK, ML, OSM, etc.) | Implemented | feat_timeline_ui |
+| [feat_source_viewer](./feat_source_viewer/) | Source inspection/annotation tool (now `feature_extraction.*` in frontend) | Implemented | feat_ml_extraction |
+| [feat_dual_source_ui](./feat_dual_source_ui/) | Source manager UI for managing/georeferencing map sources | Implemented | feat_source_viewer |
+| [feat_georeferencing](./feat_georeferencing/) | GCP-based georeferencing pipeline for historical maps | Implemented | - |
+| [feat_cicd](./feat_cicd/) | CI/CD harness — tests, validation, deploy workflow | Implemented | - |
 
 ## Status Legend
 

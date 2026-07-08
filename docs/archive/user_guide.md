@@ -1,5 +1,7 @@
 # Trondheim Historical Map - User Guide
 
+> **DEPRECATED (2026-07-04):** Archived — see the root `README.md` and `AGENTS.md` for current documentation.
+
 Welcome to the Trondheim Historical Map! This interactive application allows you to explore how the Trondheim region has evolved over time, from 1850 to the present day.
 
 ## Overview

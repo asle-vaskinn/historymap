@@ -60,8 +60,11 @@ When a doc entry and the code disagree, **trust the code and flag the doc**.
 
 ## Frontend intentional behaviors (not bugs)
 
-- Undated **buildings** appear from **1960**; undated **roads** from **2000** — deliberate
-  fallbacks. Don't "fix" without checking `docs/spec/feat_temporal_pipeline/`.
+- ~~Undated **buildings** appear from **1960**; undated **roads** from **2000**~~ —
+  the frontend fallback was **removed 2026-07-04**: low-evidence (`ev='l'`)
+  buildings now render muted with an "Estimated" toggle. The **data-level**
+  1960 inheritance still exists in merge output until the Matrikkelen +
+  backward-pass work (`docs/spec/feat_temporal_pipeline/SPEC.md`) lands.
 - Roads before 1900 are evidence-gated (`ev == 'h'` only).
 - **Type A** sources (sef/mat/tk/man/finn/osm) are timeline-filtered; **Type B** ML snapshots
   (kv1880/kv1904/air1947) are all-or-nothing per `snapshotFilter`. Test both paths after
