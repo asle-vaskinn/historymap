@@ -2,6 +2,8 @@
 *.pyc
 __pycache__/
 .venv/
+.testmondata
+.pytest_cache/
 venv/
 
 # OS

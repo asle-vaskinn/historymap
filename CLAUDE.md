@@ -10,6 +10,41 @@ This file provides guidance to Claude Code when working with this repository.
 
 **Trondheim Historical Map** - Interactive web application for exploring Trondheim's development from 1700 to present using ML-extracted features from historical Kartverket maps combined with modern OSM data. Buildings/roads/water carry temporal attributes (`sd`/`ed`) filtered by a year slider.
 
+## Workflow tiers
+
+> **This policy overrides any heavier plugin/skill workflow** (TDD-always skills,
+> multi-agent orchestration, the `/propose → /implement → /test → /sync` cycle).
+> Those are opt-in for Tier 2–3 work, not mandatory for every edit.
+
+Default to the lowest tier that fits the change. Only escalate when the change crosses a module boundary or touches shared state, IO, migrations, auth, or a hot path. If I say "quick", force Tier 0–1.
+
+**Tier 0 (trivial)** — typo, rename, comment, config value: make the change directly. No plan, no new tests. Run only a directly-touched test if one exists.
+
+**Tier 1 (local)** — one function/module, no interface change: one-line plan inline, then edit. Run only the affected module's tests — prefer `python3 -m pytest --testmon` (testmon auto-selects the tests that exercise your change), or name the file directly, e.g. `python3 -m pytest tests/test_result.py`.
+
+**Tier 2 (feature/interface)** — new public behavior or multi-module change: short plan first, TDD, run the affected modules plus their importers (e.g. `python3 -m pytest tests/test_result.py tests/test_constants.py`, or `--testmon` to follow the dependency graph).
+
+**Tier 3 (risky)** — shared state, migrations, auth, hot path: full discipline — plan, tests-first, full suite, verification pass.
+
+Do not run the full test suite or full rebuild for Tier 0–1 changes. Full suite runs once before commit/PR, not per edit.
+
+**Repo-specific Tier 3 danger zones** (always escalate when touched):
+- `scripts/pipeline.py`, `scripts/merge/` and `scripts/export/` — pipeline stages write shared generated data in `data/merged/` and `data/export/`; a regression corrupts every downstream layer. Re-run the affected stage + full `pytest tests/`.
+- `backend/jobs.py` / `backend/app.py` — the sequential subprocess job queue (shared runtime state).
+- Affine/TPS transform math duplicated across `frontend/source_manager.html` and `frontend/feature_extraction.js` (AGENTS.md gotcha #6) — a fix in one almost always belongs in both.
+- `scripts/normalize/base.py` and the `sd`/`ed`/`ev` schema (`docs/tech/DATA_SCHEMA.md`) — schema changes ripple through normalize → merge → export.
+- ML train/predict/vectorize (`ml/`) — model + inference contract.
+
+### Incremental testing commands
+
+| When | Command |
+|------|---------|
+| (a) Fast scoped run during iteration | `python3 -m pytest --testmon`  (or `python3 -m pytest --lf` for last-failed) |
+| Watch loop (auto-runs affected tests on save) | `ptw`  (uses `--testmon` per `pytest.ini`) |
+| (b) Full suite before commit/PR | `python3 -m pytest tests/` |
+
+First `--testmon` run seeds its dependency DB (`.testmondata`, git-ignore it) by running everything once; subsequent runs are scoped to what changed.
+
 ## Workflow System
 
 ### Document-Driven Development
